@@ -34,3 +34,12 @@ jobs:
 
       - name: Run Global Vitest Suite
         run: npx vitest run
+
+      - name: Setup Python 3.11 (Affiliate Suite)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify Affiliate Suite Python Syntax
+        run: |
+          python -m py_compile affiliate-suite/*.py

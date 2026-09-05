@@ -30,8 +30,9 @@ import Finance from "@/pages/finance";
 import MarketIntelligence from "@/pages/market-intelligence";
 import Tracking from "@/pages/tracking";
 import AdvancedAuction from "@/pages/advanced-auction";
-import QATestCases from "@/pages/qa-test-cases";
 import AdminDashboard from "@/pages/admin-dashboard";
+import MarketplacePage from "@/pages/marketplace";
+import EscrowCheckoutPage from "@/pages/escrow-checkout";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,6 +44,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/marketplace" component={MarketplacePage} />
+      <Route path="/escrow/checkout/:bidId" component={EscrowCheckoutPage} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/requirements" component={Requirements} />

@@ -26,8 +26,11 @@ import trackingRouter from "./tracking";
 import qaRouter from "./qa";
 import webhooksRouter from "./webhooks";
 import kycRouter from "./kyc";
+import escrowRouter from "./escrow";
 
 const router: IRouter = Router();
+
+router.use(escrowRouter);
 
 router.use(healthRouter);
 router.use(authRouter);
