@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Layout } from "@/components/layout";
+import Layout from "@/components/layout";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ export default function EscrowCheckoutPage() {
   const [paymentSuccess, setPaymentSuccess] = useState(false);
 
   // Fetch Bid & Requirement Details
-  const { data: bidData, isLoading } = useQuery({
+  const { data: bidData, isLoading } = useQuery<any>({
     queryKey: [`/api/bids/${bidId}`],
     enabled: !!bidId,
   });

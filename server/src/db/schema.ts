@@ -23,6 +23,8 @@ export const users = pgTable("users", {
   kyc_status: kycStatusEnum("kyc_status").notNull().default("pending"),
   razorpay_account_id: text("razorpay_account_id"),
   city: text("city").notNull().default("Bengaluru"),
+  state_code: text("state_code").notNull().default("29"), // Indian 2-digit GST state code (29=Karnataka)
+  entity_type: text("entity_type").notNull().default("individual"), // "individual" | "company" | "llp" | "huf"
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -102,6 +104,32 @@ export const disputes = pgTable(
   (table) => [
     index("idx_disputes_escrow_status").on(table.escrow_id, table.status),
   ]
+);
+
+// 6. Webhook Events Table (Idempotency & Replay Protection)
+export const webhook_events = pgTable(
+  "webhook_events",
+  {
+    id: text("id").primaryKey(), // Razorpay event_id
+    event_type: text("event_type").notNull(),
+    resource_id: text("resource_id"),
+    payload: jsonb("payload"),
+    processed_at: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_webhook_events_event_type").on(table.event_type),
+  ]
+);
+
+// 7. Invoice Sequences Table (GST Rule 46 Concurrency & Serialization)
+export const invoice_sequences = pgTable(
+  "invoice_sequences",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    financial_year: text("financial_year").notNull().unique(), // e.g. "2026-27"
+    last_sequence: integer("last_sequence").notNull().default(0),
+    updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  }
 );
 
 // Relations

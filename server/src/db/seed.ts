@@ -1,6 +1,7 @@
 import { db } from "./connection.js";
 import { users, requirements, bids, escrow_payments, disputes } from "./schema.js";
-import { v4 as uuidv4 } from "uuid";
+import crypto from "crypto";
+const uuidv4 = () => crypto.randomUUID();
 
 const CITIES = ["Mumbai", "Bengaluru", "Delhi NCR", "Hyderabad", "Chennai", "Pune", "Kolkata", "Ahmedabad"];
 

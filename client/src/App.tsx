@@ -86,7 +86,7 @@ function Router() {
       <Route path="/admin" component={Admin} />
       <Route path="/admin/dashboard" component={AdminDashboard} />
       <Route path="/qa" component={QA} />
-      <Route path="/qa/test-cases" component={QATestCases} />
+      <Route path="/qa/test-cases" component={QA} />
       <Route path="/finance" component={Finance} />
       <Route path="/market" component={MarketIntelligence} />
       <Route path="/tracking/:requirementId" component={Tracking} />

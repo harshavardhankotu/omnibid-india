@@ -4,7 +4,9 @@ import sqlite3
 import json
 from datetime import datetime
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'marketing.db')
+DEFAULT_DB = "/var/data/affiliate.db" if os.environ.get("FLASK_ENV") == "production" or os.path.exists("/var/data") else os.path.join(os.path.dirname(__file__), 'marketing.db')
+DB_PATH = os.environ.get('SQLITE_DB_PATH', DEFAULT_DB)
+os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
 
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)

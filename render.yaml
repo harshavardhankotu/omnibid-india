@@ -1,9 +1,9 @@
-# Render Blueprint configuration for deploying the OmniBid India Express backend
+# Render Blueprint configuration for deploying OmniBid India & Affiliate Marketing Suite
 services:
   - type: web
     name: omnibid-server
     runtime: node
-    plan: free
+    plan: starter
     buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @omnibid/server build
     startCommand: pnpm --filter @omnibid/server start
     envVars:
@@ -12,7 +12,9 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        sync: false  # To be configured in Render dashboard
+        sync: false  # Supabase pooler port 6543
+      - key: DIRECT_URL
+        sync: false  # Supabase direct port 5432
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_ANON_KEY
@@ -23,5 +25,31 @@ services:
         sync: false
       - key: RAZORPAY_KEY_SECRET
         sync: false
-      - key: JWT_SECRET
+      - key: RAZORPAY_WEBHOOK_SECRET
         sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+  - type: web
+    name: omnibid-affiliate-suite
+    runtime: docker
+    dockerfilePath: ./affiliate-suite/Dockerfile
+    dockerContext: ./affiliate-suite
+    plan: starter
+    disk:
+      name: affiliate-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: SQLITE_DB_PATH
+        value: /var/data/affiliate.db
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: POSTBACK_SECRET
+        generateValue: true
+      - key: OMNIBID_API_URL
+        value: https://prompt-understander-1.onrender.com

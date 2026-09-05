@@ -10,7 +10,13 @@ from flask import Flask, request, jsonify, redirect
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'affiliate_secret_production_key_1234')
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'marketing.db')
+# Persistent SQLite database resolution for Linux containers & Render disk mounts
+DEFAULT_DB = "/var/data/affiliate.db" if os.environ.get("FLASK_ENV") == "production" or os.path.exists("/var/data") else os.path.join(os.path.dirname(__file__), 'marketing.db')
+DB_PATH = os.environ.get('SQLITE_DB_PATH', DEFAULT_DB)
+
+# Ensure directory assertion for WAL and journal files
+os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
+
 POSTBACK_SECRET = os.environ.get('POSTBACK_SECRET', 'default_secret_key_123')
 
 def get_db():

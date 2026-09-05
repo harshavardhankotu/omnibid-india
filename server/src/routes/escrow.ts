@@ -1,11 +1,11 @@
-import { Router } from "express";
+import { Router, type IRouter } from "express";
 import { EscrowService } from "../services/escrow.service.js";
 import { InvoiceService } from "../services/invoice.service.js";
 import { db } from "../db/connection.js";
 import { escrow_payments, requirements, bids, users } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 
-const router = Router();
+const router: IRouter = Router();
 
 // POST /api/escrow/order
 router.post("/api/escrow/order", async (req, res) => {

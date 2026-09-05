@@ -27,10 +27,12 @@ import qaRouter from "./qa";
 import webhooksRouter from "./webhooks";
 import kycRouter from "./kyc";
 import escrowRouter from "./escrow";
+import webhookRouter from "./webhook";
 
 const router: IRouter = Router();
 
 router.use(escrowRouter);
+router.use(webhookRouter);
 
 router.use(healthRouter);
 router.use(authRouter);

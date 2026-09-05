@@ -21,6 +21,55 @@ export interface EscrowOrderResult {
   currency: string;
 }
 
+export interface TDSCalculationOptions {
+  bidAmount: number;
+  sector: string;
+  vendorEntityType?: string;
+}
+
+/**
+ * Validates and computes TDS deduction in strict compliance with Indian Income Tax Act:
+ * - Section 194C (Works Contracts / Construction): 1% for Individual/HUF, 2% for Company/LLP
+ * - Section 194J (Professional / Technical Fees): 10% for Professional Services, 2% for Technical Services
+ * - Statutory single contract threshold: Exemption if <= ₹30,000
+ */
+export function computeContractTDS(options: TDSCalculationOptions): {
+  section: "194C" | "194J";
+  tdsRate: number;
+  tdsAmount: number;
+} {
+  const { bidAmount, sector, vendorEntityType = "individual" } = options;
+
+  // Statutory exemption threshold under Sec 194C/J: ₹30,000 for single contract
+  if (bidAmount <= 30000) {
+    return {
+      section: sector === "Construction" ? "194C" : "194J",
+      tdsRate: 0,
+      tdsAmount: 0,
+    };
+  }
+
+  // Section 194C: Works Contracts (Construction / Civil Works)
+  if (sector === "Construction") {
+    const isIndividual = vendorEntityType === "individual" || vendorEntityType === "huf";
+    const rate = isIndividual ? 0.01 : 0.02; // 1% Individual/HUF, 2% Company/LLP
+    return {
+      section: "194C",
+      tdsRate: rate,
+      tdsAmount: Math.round(bidAmount * rate * 100) / 100,
+    };
+  }
+
+  // Section 194J: Professional & Technical Services (IT, Legal, etc.)
+  const isProfessional = sector === "Legal";
+  const rate = isProfessional ? 0.10 : 0.02; // 10% for Professional Services, 2% for Technical Services
+  return {
+    section: "194J",
+    tdsRate: rate,
+    tdsAmount: Math.round(bidAmount * rate * 100) / 100,
+  };
+}
+
 export class EscrowService {
   /**
    * 1. Create Razorpay Escrow Order with 2% platform fee
@@ -65,7 +114,7 @@ export class EscrowService {
   }
 
   /**
-   * 2. Verify signature and commit escrow payment state to 'held'
+   * 2. Verify signature and commit escrow payment state to 'held' with Section 194C / 194J TDS deduction
    */
   static async verifyAndHoldEscrow(params: {
     requirementId: string;
@@ -93,12 +142,19 @@ export class EscrowService {
       throw new Error("Bid record not found for escrow verification");
     }
 
+    const [reqRecord] = await db.select().from(requirements).where(eq(requirements.id, requirementId)).limit(1);
+    const [providerRecord] = await db.select().from(users).where(eq(users.id, bidRecord.provider_id)).limit(1);
+
     const bidAmount = parseFloat(bidRecord.bid_amount);
     const platformFee = Math.round(bidAmount * 0.02 * 100) / 100;
     const totalAmount = bidAmount + platformFee;
     
-    // Indian TDS: 2% deduction under Sec 194C / 194J if payout > ₹30,000
-    const tdsAmount = bidAmount > 30000 ? Math.round(bidAmount * 0.02 * 100) / 100 : 0;
+    // Indian TDS: Distinct Section 194C vs 194J based on entity type and sector
+    const { tdsAmount } = computeContractTDS({
+      bidAmount,
+      sector: reqRecord?.sector || "IT",
+      vendorEntityType: providerRecord?.entity_type || "individual",
+    });
     const netPayout = bidAmount - tdsAmount;
 
     // Save escrow record
