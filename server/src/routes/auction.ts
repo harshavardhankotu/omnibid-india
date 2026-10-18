@@ -228,4 +228,46 @@ router.post("/auctions/:requirementId/lots", requireAuth, async (req, res): Prom
   res.status(201).json(created.map(l => ({ ...l, maxBudget: Number(l.maxBudget ?? 0), createdAt: l.createdAt.toISOString() })));
 });
 
+/**
+ * GET /auctions/:requirementId/live-stream
+ * Server-Sent Events (SSE) live ticker for real-time bid updates and auction countdown.
+ */
+router.get("/auctions/:requirementId/live-stream", async (req, res): Promise<void> => {
+  const reqId = String(req.params.requirementId);
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+
+  res.write(`event: connected\ndata: ${JSON.stringify({ requirementId: reqId, status: "live", timestamp: new Date().toISOString() })}\n\n`);
+
+  try {
+    const liveBids = await db
+      .select({
+        id: bidsTable.id,
+        amount: bidsTable.bidAmount,
+        status: bidsTable.status,
+        createdAt: bidsTable.createdAt,
+      })
+      .from(bidsTable)
+      .where(eq(bidsTable.requirementId, reqId))
+      .orderBy(sql`${bidsTable.createdAt} DESC`)
+      .limit(10);
+
+    res.write(`event: bids_snapshot\ndata: ${JSON.stringify({ bids: liveBids })}\n\n`);
+  } catch (e: any) {
+    res.write(`event: error\ndata: ${JSON.stringify({ message: e.message })}\n\n`);
+  }
+
+  const heartbeat = setInterval(() => {
+    res.write(`event: heartbeat\ndata: ${JSON.stringify({ time: Date.now() })}\n\n`);
+  }, 15000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    res.end();
+  });
+});
+
 export default router;

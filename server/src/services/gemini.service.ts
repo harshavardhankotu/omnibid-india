@@ -11,6 +11,43 @@ export interface SmartMatchResponse {
 
 export class GeminiService {
   /**
+   * Deterministic scoring calculation based on price competitiveness, KYC verification,
+   * milestone structure, and technical scope alignment.
+   */
+  static computeHeuristicScore(params: {
+    budget: number;
+    bidAmount: number;
+    kycStatus?: string;
+    milestoneCount?: number;
+    proposalText?: string;
+    customData?: any;
+  }): { score: number; confidence: number; reason: string } {
+    const { budget, bidAmount, kycStatus = "verified", milestoneCount = 1, proposalText = "", customData = {} } = params;
+    let score = 50;
+
+    // Price ratio score
+    if (bidAmount <= budget) {
+      score += Math.min(30, ((budget - bidAmount) / budget) * 50);
+    } else {
+      score -= ((bidAmount - budget) / budget) * 40;
+    }
+
+    if (kycStatus === "verified") score += 15;
+    if (milestoneCount >= 2) score += 5;
+
+    const customDataStr = JSON.stringify(customData).toLowerCase();
+    const proposalLower = proposalText.toLowerCase();
+    if (customDataStr.includes("steel") && proposalLower.includes("steel")) score += 10;
+    if (customDataStr.includes("kubernetes") && proposalLower.includes("cloud")) score += 10;
+
+    return {
+      score: Math.round(score * 10) / 10,
+      confidence: 0.88,
+      reason: `Bid of Rs. ${bidAmount} vs target Rs. ${budget} (KYC: ${kycStatus}, Milestones: ${milestoneCount})`,
+    };
+  }
+
+  /**
    * Evaluates bids against requirement metadata using Gemini 1.5 Flash
    * with offline deterministic fallback.
    */
