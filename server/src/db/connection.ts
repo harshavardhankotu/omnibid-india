@@ -12,28 +12,43 @@ dotenv.config();
 
 const { Pool } = pg;
 
-const connectionString = process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/omnibid";
-const isLocal = connectionString.includes("localhost") || connectionString.includes("127.0.0.1");
+// 1. Runtime API connection string: Port 6543 (Supabase Transaction Pooler)
+const runtimeUrl = process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/omnibid";
 
-// Resolve CA certificate bundle for strict TLS verification
+// 2. Direct migration connection string: Port 5432 (Session Mode)
+const directUrl = process.env.DIRECT_URL || runtimeUrl;
+
+// Resolve bundled Global Root CA certificate for strict TLS verification
 const caCertPath = path.resolve(__dirname, "../../certs/supabase-prod-ca.crt");
-let caCert: string | undefined;
-if (fs.existsSync(caCertPath)) {
-  caCert = fs.readFileSync(caCertPath, "utf-8");
-}
+const caCert = fs.existsSync(caCertPath) ? fs.readFileSync(caCertPath, "utf-8") : undefined;
 
+const getSSLConfig = (connStr: string) => {
+  const isLocal = connStr.includes("localhost") || connStr.includes("127.0.0.1");
+  if (isLocal) return false;
+  return {
+    ca: caCert,
+    rejectUnauthorized: true,
+  };
+};
+
+// Split Pooler 1: Runtime API queries via transaction pooler (port 6543)
 export const pool = new Pool({
-  connectionString,
-  ssl: isLocal
-    ? false
-    : {
-        ca: caCert,
-        rejectUnauthorized: true,
-      },
+  connectionString: runtimeUrl,
+  ssl: getSSLConfig(runtimeUrl),
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
 });
 
+// Split Pooler 2: Direct session mode for schema migrations (port 5432)
+export const directPool = new Pool({
+  connectionString: directUrl,
+  ssl: getSSLConfig(directUrl),
+  max: 5,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 10000,
+});
+
 export const db = drizzle(pool, { schema });
+export const migrationDb = drizzle(directPool, { schema });
 export default db;
