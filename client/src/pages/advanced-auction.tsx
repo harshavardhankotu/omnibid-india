@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Layout from "@/components/layout";
 import { useAuth } from "@/lib/auth";
 import { useParams } from "wouter";
@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Layers, Lock, RotateCcw, CheckCircle2, AlertTriangle,
   Plus, Trash2, Trophy, BarChart3, Users, Gavel,
+  Radio, Activity, Zap, TrendingDown,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -85,7 +86,42 @@ export default function AdvancedAuction() {
   const [qualifiedIds, setQualifiedIds] = useState("");
   const [sealedRevealAt, setSealedRevealAt] = useState("");
   const [lots, setLots] = useState<Lot[]>([{ lotNumber: 1, title: "", description: "", city: "", maxBudget: "" }]);
-  const [activeTab, setActiveTab] = useState<"config" | "lots" | "vendor-ranking" | "rounds">("config");
+  const [activeTab, setActiveTab] = useState<"config" | "lots" | "vendor-ranking" | "rounds" | "live-stream">("config");
+  const [liveBids, setLiveBids] = useState<Array<{ id: string; amount: number; status: string; createdAt: string }>>([]);
+  const [streamConnected, setStreamConnected] = useState(false);
+  const [lastHeartbeat, setLastHeartbeat] = useState<string>("");
+
+  useEffect(() => {
+    if (activeTab !== "live-stream" || !requirementId) return;
+
+    const eventSource = new EventSource(`${BASE}/api/auctions/${requirementId}/live-stream`);
+
+    eventSource.addEventListener("connected", () => {
+      setStreamConnected(true);
+    });
+
+    eventSource.addEventListener("bids_snapshot", (e: MessageEvent) => {
+      try {
+        const parsed = JSON.parse(e.data);
+        if (parsed.bids) setLiveBids(parsed.bids);
+      } catch (err) {
+        console.error("Failed to parse bids snapshot", err);
+      }
+    });
+
+    eventSource.addEventListener("heartbeat", () => {
+      setLastHeartbeat(new Date().toLocaleTimeString());
+    });
+
+    eventSource.onerror = () => {
+      setStreamConnected(false);
+    };
+
+    return () => {
+      eventSource.close();
+      setStreamConnected(false);
+    };
+  }, [activeTab, requirementId]);
 
   const isEnterprise = ["enterprise_buyer"].includes(user?.role ?? "");
   const isBuyer = ["buyer", "both", "retail_buyer", "enterprise_buyer"].includes(user?.role ?? "");
@@ -195,6 +231,7 @@ export default function AdvancedAuction() {
   const visibleTypes = AUCTION_TYPES.filter(t => t.roles.includes(user.role));
   const tabs = [
     { id: "config", label: "Auction Type" },
+    { id: "live-stream", label: "🔴 Live War Room & Ticker" },
     ...(isEnterprise ? [{ id: "lots", label: "Multi-Lot" }, { id: "rounds", label: "Rounds" }] : []),
     { id: "vendor-ranking", label: "AI Vendor Ranking" },
   ] as { id: typeof activeTab; label: string }[];
@@ -346,6 +383,144 @@ export default function AdvancedAuction() {
             <Button onClick={() => saveConfig.mutate()} disabled={saveConfig.isPending} className="w-full">
               {saveConfig.isPending ? "Saving..." : "Save Auction Configuration"}
             </Button>
+          </div>
+        )}
+
+        {/* Live War Room & Ticker tab */}
+        {activeTab === "live-stream" && (
+          <div className="space-y-4">
+            {/* Real-time Status Card */}
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="relative flex items-center justify-center">
+                    <span className={`inline-block w-3 h-3 rounded-full ${streamConnected ? "bg-green-500 animate-ping" : "bg-red-500"}`} />
+                    <span className={`absolute inline-block w-2 h-2 rounded-full ${streamConnected ? "bg-green-600" : "bg-red-600"}`} />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-sm flex items-center gap-1.5">
+                      <Radio className="h-4 w-4 text-primary" />
+                      {streamConnected ? "Live SSE Auction Stream Connected" : "Connecting to Auction Live Feed..."}
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      {streamConnected ? `Real-time heartbeat active (${lastHeartbeat || "just now"})` : "Establishing zero-latency reverse auction connection"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Badge variant={streamConnected ? "default" : "secondary"} className="text-xs">
+                    {streamConnected ? "LIVE TICKER" : "DISCONNECTED"}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Quick Metrics */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <span className="text-xs text-muted-foreground uppercase font-medium">Leading L1 Quote</span>
+                  <div className="text-xl font-bold text-green-600 mt-1">
+                    {liveBids.length > 0 ? `₹${Number(liveBids[0].amount).toLocaleString("en-IN")}` : "No Bids Yet"}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <span className="text-xs text-muted-foreground uppercase font-medium">Bids In Stream</span>
+                  <div className="text-xl font-bold mt-1">
+                    {liveBids.length}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="col-span-2 sm:col-span-1">
+                <CardContent className="p-4 text-center">
+                  <span className="text-xs text-muted-foreground uppercase font-medium">Protocol</span>
+                  <div className="text-sm font-semibold text-primary mt-1 flex items-center justify-center gap-1">
+                    <Zap className="h-3.5 w-3.5 text-amber-500" />
+                    GeM / CPWD L1 Rules
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Live Bids Feed */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-primary" />
+                    Live Reverse Auction Stream
+                  </span>
+                  <span className="text-xs text-muted-foreground font-normal">Auto-updates on price drops</span>
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Providers compete dynamically. In accordance with Indian procurement norms, the lowest verified compliant offer holds L1 rank.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {liveBids.length === 0 ? (
+                  <div className="py-10 text-center text-muted-foreground text-sm">
+                    <TrendingDown className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
+                    No bids recorded in this session yet. Waiting for incoming provider submissions...
+                  </div>
+                ) : (
+                  liveBids.map((bid, index) => {
+                    const isL1 = index === 0;
+                    const isL2 = index === 1;
+                    const isL3 = index === 2;
+                    return (
+                      <div
+                        key={bid.id}
+                        className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                          isL1
+                            ? "border-green-300 bg-green-50/50 dark:bg-green-950/20 shadow-xs"
+                            : isL2
+                            ? "border-blue-200 bg-blue-50/30 dark:bg-blue-950/10"
+                            : "border-border/60 bg-card"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-bold ${
+                              isL1
+                                ? "bg-green-600 text-white"
+                                : isL2
+                                ? "bg-blue-600 text-white"
+                                : isL3
+                                ? "bg-amber-600 text-white"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {isL1 ? "L1 LEADER" : isL2 ? "L2" : isL3 ? "L3" : `L${index + 1}`}
+                          </span>
+                          <div>
+                            <div className="text-xs font-mono text-muted-foreground">
+                              Bid #{bid.id.slice(0, 8)}...
+                            </div>
+                            <div className="text-[10px] text-muted-foreground">
+                              {new Date(bid.createdAt).toLocaleTimeString()}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <div className={`font-bold text-sm ${isL1 ? "text-green-600" : "text-foreground"}`}>
+                            ₹{Number(bid.amount).toLocaleString("en-IN")}
+                          </div>
+                          <Badge variant="outline" className="text-[10px] capitalize">
+                            {bid.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </CardContent>
+            </Card>
           </div>
         )}
 

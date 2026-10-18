@@ -28,7 +28,9 @@ import {
   IndianRupee,
   TrendingUp,
   MapPin,
+  Globe,
 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -36,6 +38,7 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const { user, logout } = useAuth();
+  const { language, setLanguage, t } = useI18n();
   const [, setLocation] = useLocation();
 
   const { data: notifs } = useListNotifications({
@@ -74,27 +77,49 @@ export default function Layout({ children }: LayoutProps) {
               </Link>
               <nav className="hidden md:flex items-center gap-4">
                 <Link href="/requirements" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  Browse
+                  {t("browse")}
                 </Link>
                 {isBuyer && (
                   <Link href="/requirements/new" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                    Post Problem
+                    {t("post_problem")}
                   </Link>
                 )}
                 {user && (
                   <Link href="/analytics" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                    Analytics
+                    {t("analytics")}
                   </Link>
                 )}
                 {user && (
                   <Link href="/market" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                    Market
+                    {t("market")}
                   </Link>
                 )}
               </nav>
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Bharat Multilingual Switcher */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="px-2 text-xs flex items-center gap-1 font-semibold" title="Change Language">
+                    <Globe className="h-3.5 w-3.5 text-primary" />
+                    <span>{language === "hi" ? "हिन्दी" : language === "te" ? "తెలుగు" : "EN"}</span>
+                    <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-32">
+                  <DropdownMenuItem onClick={() => setLanguage("en")}>
+                    English
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setLanguage("hi")}>
+                    हिन्दी (Hindi)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setLanguage("te")}>
+                    తెలుగు (Telugu)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               {user ? (
                 <>
                   {isBuyer && (
@@ -105,7 +130,7 @@ export default function Layout({ children }: LayoutProps) {
                       data-testid="button-post-problem"
                     >
                       <PlusCircle className="h-4 w-4 mr-1" />
-                      Post Problem
+                      {t("post_problem")}
                     </Button>
                   )}
 
@@ -215,10 +240,10 @@ export default function Layout({ children }: LayoutProps) {
               ) : (
                 <>
                   <Button variant="ghost" size="sm" onClick={() => setLocation("/login")} data-testid="button-login">
-                    Login
+                    {t("login")}
                   </Button>
                   <Button size="sm" onClick={() => setLocation("/register")} data-testid="button-register">
-                    Join Free
+                    {t("join_free")}
                   </Button>
                 </>
               )}

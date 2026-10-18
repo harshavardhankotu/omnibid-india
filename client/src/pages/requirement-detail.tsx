@@ -473,6 +473,35 @@ export default function RequirementDetail() {
               </Button>
             )}
 
+            {/* WhatsApp Contractor Group Broadcast */}
+            <a
+              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                `⚡ *NEW PROCUREMENT REQUIREMENT ON OMNIBID INDIA*\n\n` +
+                `📋 *Title*: ${req.title}\n` +
+                `📍 *Location*: ${req.city || "Pan India"}\n` +
+                `💰 *Budget*: ₹${Number(req.maxBudget || 0).toLocaleString("en-IN")}\n` +
+                `🛡️ *Security*: 100% Escrow Protected by OmniBid\n\n` +
+                `Submit your reverse bid now:\n${typeof window !== "undefined" ? window.location.href : ""}`
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full mt-2 inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-green-600 hover:bg-green-700 text-white h-9 px-4 py-2"
+              title="Share deal directly to contractor and vendor WhatsApp groups"
+            >
+              <MessageSquare className="h-4 w-4 mr-1.5" />
+              Broadcast to Contractor WhatsApp Groups
+            </a>
+
+            {/* Live War Room Ticker Link */}
+            <Button
+              variant="outline"
+              className="w-full mt-2 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/20"
+              onClick={() => setLocation(`/auction/${id}`)}
+            >
+              <Flame className="h-4 w-4 mr-1.5 text-red-500 animate-pulse" />
+              Open Live Reverse Auction War Room
+            </Button>
+
             {!user && (
               <Button className="w-full mt-3" onClick={() => setLocation("/login")} data-testid="button-login-to-bid">
                 Login to Place a Bid
@@ -552,6 +581,10 @@ export default function RequirementDetail() {
                           {"isBackhaul" in bid && bid.isBackhaul && (
                             <Badge className="text-[10px] px-1.5 py-0 bg-teal-500 text-white">Cancellation Slot</Badge>
                           )}
+                          <span className="text-[10px] text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 font-medium" title="DigiLocker Identity & GST Verified">
+                            <Shield className="h-2.5 w-2.5 text-emerald-600" />
+                            DigiLocker Verified
+                          </span>
                           {"crewSizeOffered" in bid && bid.crewSizeOffered && (bid.crewSizeOffered as number) > 1 && (
                             <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                               <Users className="h-3 w-3" />{bid.crewSizeOffered as number} workers

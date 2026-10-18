@@ -70,8 +70,8 @@ develop-eggs/
 dist/
 downloads/
 eggs/
-.eggs/
-lib/
+/lib/
+!client/src/lib/
 lib64/
 parts/
 sdist/

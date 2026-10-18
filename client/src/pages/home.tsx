@@ -18,10 +18,12 @@ import {
   TrendingDown,
   Zap,
 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 export default function Home() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
+  const { t } = useI18n();
   const [search, setSearch] = useState("");
 
   const { data: categories } = useListCategories();
@@ -35,19 +37,22 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
-      <div className="bg-gradient-to-br from-primary to-primary/80 text-white">
+      <div className="bg-gradient-to-br from-primary via-primary/95 to-primary/80 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
           <div className="flex items-center gap-2 mb-4">
-            <Gavel className="h-8 w-8" />
+            <Gavel className="h-8 w-8 text-amber-300" />
             <span className="text-2xl font-bold tracking-tight">OmniBid India</span>
+            <Badge variant="outline" className="border-white/30 text-white text-[10px] ml-2 font-mono">
+              BHARAT B2B ESCROW
+            </Badge>
           </div>
           <h1 className="text-3xl md:text-5xl font-bold leading-tight mb-3">
             Post your problem.
             <br />
             <span className="text-amber-300">Watch prices drop.</span>
           </h1>
-          <p className="text-white/80 text-lg mb-6 max-w-xl">
-            India's reverse auction marketplace — verified providers compete for your business. The price goes down, not up.
+          <p className="text-white/90 text-base md:text-lg mb-6 max-w-xl">
+            {t("tagline")} — verified providers compete for your business with milestone-backed escrow protection.
           </p>
 
           <form onSubmit={handleSearch} className="flex gap-2 max-w-lg">
@@ -56,20 +61,33 @@ export default function Home() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="What do you need help with?"
+                placeholder="What do you need help with? (e.g. Civil Works, Steel Beams, IT Services)"
                 className="pl-9 bg-white/10 border-white/20 text-white placeholder:text-white/60 focus-visible:ring-white/40"
                 data-testid="input-search"
               />
             </div>
-            <Button type="submit" variant="secondary" className="font-semibold" data-testid="button-search">
+            <Button type="submit" variant="secondary" className="font-semibold shadow-md" data-testid="button-search">
               Search
             </Button>
           </form>
 
-          <div className="flex items-center gap-6 mt-6 text-sm text-white/70">
-            <span className="flex items-center gap-1.5"><TrendingDown className="h-4 w-4" />Prices fall as providers compete</span>
-            <span className="flex items-center gap-1.5"><Shield className="h-4 w-4" />Verified providers</span>
-            <span className="flex items-center gap-1.5"><Zap className="h-4 w-4" />Get bids in minutes</span>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 pt-6 border-t border-white/15 text-xs text-white/90">
+            <div className="flex items-center gap-2">
+              <TrendingDown className="h-4 w-4 text-emerald-300 shrink-0" />
+              <span>Prices fall as providers compete</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-amber-300 shrink-0" />
+              <span>100% Escrow & GST Rule 46</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-cyan-300 shrink-0" />
+              <span>Live Reverse Auction Ticker</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-purple-300 shrink-0" />
+              <span>DigiLocker & KYC Verified</span>
+            </div>
           </div>
         </div>
       </div>
