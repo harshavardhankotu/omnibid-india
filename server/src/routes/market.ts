@@ -161,9 +161,9 @@ router.get("/market/vendor-ranking/:requirementId", requireAuth, async (req, res
   if (bids.length === 0) { res.json({ rankingMode, vendors: [], message: "No bids yet" }); return; }
 
   // Fetch provider details
-  const providerIds = [...new Set(bids.map(b => b.providerId))];
+  const providerIds: string[] = Array.from(new Set<string>(bids.map(b => String(b.providerId))));
 
-  const rankings = await Promise.all(providerIds.map(async (providerId) => {
+  const rankings = await Promise.all(providerIds.map(async (providerId: string) => {
     const [provider] = await db.select().from(usersTable).where(eq(usersTable.id, providerId));
     if (!provider) return null;
 
