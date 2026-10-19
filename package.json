@@ -21,5 +21,11 @@
     "pg": "^8.11.3",
     "@types/pg": "^8.11.2",
     "vitest": "^5.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "bcrypt"
+    ]
   }
 }

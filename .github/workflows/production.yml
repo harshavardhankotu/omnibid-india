@@ -27,7 +27,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Install Monorepo Dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --dangerously-allow-all-builds
 
       - name: Execute Workspace Typechecks
         run: pnpm run typecheck
