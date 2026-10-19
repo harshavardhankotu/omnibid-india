@@ -1,10 +1,13 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc, avg, count } from "drizzle-orm";
+import { eq, and, desc, asc, avg, count, min } from "drizzle-orm";
 import { db, bidsTable, requirementsTable, usersTable, categoriesTable, reviewsTable, providerSubscriptionsTable } from "@omnibid/db";
 import { CreateBidBody, ListBidsQueryParams } from "@omnibid/api-zod";
 import { requireAuth, requireCompliance } from "../middlewares/auth";
 import { notifyUser } from "../lib/notifications";
-import { min } from "drizzle-orm";
+import { broadcastAuctionEvent, extendedAuctions } from "./auction.js";
+import { notifyOutbid } from "../services/push-notification.service.js";
+import { broadcastDeal } from "../services/auto-broadcaster.js";
+import { SEEDED_AFFILIATE_OFFERS } from "./affiliate.js";
 
 const router: IRouter = Router();
 
@@ -104,6 +107,18 @@ router.post("/requirements/:requirementId/bids", requireAuth, requireCompliance,
   const hasEnvA = !!(parsed.data as { envelopeAUrl?: string }).envelopeAUrl;
   const bidStatus = isTwoEnvelope ? (hasEnvA ? "envelope_a_pending" : "active") : "active";
 
+  // Check current L1 bid prior to inserting the new bid
+  const [previousL1] = await db
+    .select({
+      id: bidsTable.id,
+      providerId: bidsTable.providerId,
+      bidAmount: bidsTable.bidAmount,
+    })
+    .from(bidsTable)
+    .where(and(eq(bidsTable.requirementId, requirementId), eq(bidsTable.status, "active")))
+    .orderBy(asc(bidsTable.bidAmount))
+    .limit(1);
+
   const [bid] = await db.insert(bidsTable).values({
     requirementId,
     providerId: req.user!.userId,
@@ -124,6 +139,65 @@ router.post("/requirements/:requirementId/bids", requireAuth, requireCompliance,
 
   if (sub && sub.plan === "free") {
     await db.update(providerSubscriptionsTable).set({ bidsRemaining: sub.bidsRemaining - 1 }).where(eq(providerSubscriptionsTable.id, sub.id));
+  }
+
+  // Check if this new bid captures L1 position
+  const newBidAmount = parsed.data.bidAmount;
+  const isNewL1 = !previousL1 || newBidAmount < Number(previousL1.bidAmount);
+
+  if (isNewL1) {
+    // 1. Anti-Sniping Timer Extension:
+    // When a new L1 bid arrives within 120 seconds of auctionEndsAt:
+    const now = Date.now();
+    const endsAtMs = new Date(requirement.auctionEndsAt).getTime();
+    const remainingSeconds = Math.floor((endsAtMs - now) / 1000);
+
+    if (remainingSeconds <= 120) {
+      const newEndsAt = new Date(now + 120 * 1000);
+      await db
+        .update(requirementsTable)
+        .set({ auctionEndsAt: newEndsAt })
+        .where(eq(requirementsTable.id, requirementId));
+
+      extendedAuctions.add(requirementId);
+
+      // Emit AUCTION_EXTENDED event via SSE stream
+      broadcastAuctionEvent(requirementId, "AUCTION_EXTENDED", {
+        requirementId,
+        newAuctionEndsAt: newEndsAt.toISOString(),
+        remainingSeconds: 120,
+        extendedBySeconds: 120,
+        triggeredByBidId: bid.id,
+        newL1Amount: newBidAmount,
+        reason: "Anti-sniping auto extension triggered within final 120 seconds",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // 2. Trigger notifyOutbid to the previously leading contractor
+    if (previousL1 && previousL1.providerId !== req.user!.userId) {
+      notifyOutbid(
+        requirementId,
+        previousL1.providerId,
+        newBidAmount,
+        requirement.title
+      ).catch((err) => console.warn("[Bids] Failed to send outbid notification:", err));
+    }
+
+    // 3. Emit real-time L1 update via SSE
+    broadcastAuctionEvent(requirementId, "NEW_L1_BID", {
+      requirementId,
+      bidId: bid.id,
+      amount: newBidAmount,
+      providerId: req.user!.userId,
+      timestamp: new Date().toISOString(),
+    });
+
+    // 4. Trigger non-blocking multi-lingual deal broadcast to Telegram
+    const matchedOffer = SEEDED_AFFILIATE_OFFERS.find((o) => o.active) || SEEDED_AFFILIATE_OFFERS[0];
+    broadcastDeal(requirement, bid, matchedOffer).catch((err) =>
+      console.warn("[Bids] Failed to broadcast deal to Telegram:", err)
+    );
   }
 
   await notifyUser(requirement.buyerId, "new_bid", `New bid received for "${requirement.title}"`, { requirementId, bidId: bid.id });

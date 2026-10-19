@@ -43,7 +43,32 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const { user, logout } = useAuth();
   const { language, setLanguage, t } = useI18n();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+
+  const [activePersona, setActivePersona] = useState<"buyer" | "contractor" | "admin">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("omnibid_active_persona");
+      if (saved === "buyer" || saved === "contractor" || saved === "admin") return saved;
+    }
+    if (location.includes("buyer")) return "buyer";
+    if (location.includes("provider")) return "contractor";
+    if (location.includes("admin")) return "admin";
+    return "buyer";
+  });
+
+  const handlePersonaSwitch = (newPersona: "buyer" | "contractor" | "admin") => {
+    setActivePersona(newPersona);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("omnibid_active_persona", newPersona);
+    }
+    if (newPersona === "buyer") {
+      setLocation("/dashboard/buyer");
+    } else if (newPersona === "contractor") {
+      setLocation("/dashboard/provider");
+    } else if (newPersona === "admin") {
+      setLocation("/admin/revenue");
+    }
+  };
 
   const { data: notifs } = useListNotifications({
     query: { enabled: !!user, queryKey: ["notifications"] },
@@ -80,13 +105,13 @@ export default function Layout({ children }: LayoutProps) {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex h-14 items-center justify-between">
-            <div className="flex items-center gap-6">
-              <Link href="/" className="flex items-center gap-2 font-bold text-lg text-primary">
+          <div className="flex h-14 items-center justify-between gap-2">
+            <div className="flex items-center gap-4 sm:gap-6">
+              <Link href="/" className="flex items-center gap-2 font-bold text-lg text-primary shrink-0">
                 <Gavel className="h-5 w-5" />
                 <span>OmniBid</span>
               </Link>
-              <nav className="hidden md:flex items-center gap-4">
+              <nav className="hidden lg:flex items-center gap-4">
                 <Link href="/requirements" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                   {t("browse")}
                 </Link>
@@ -108,7 +133,53 @@ export default function Layout({ children }: LayoutProps) {
               </nav>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Segmented Persona Switcher Pill */}
+            <div className="flex items-center bg-muted/70 dark:bg-muted/40 p-0.5 sm:p-1 rounded-full border border-border shadow-xs">
+              <button
+                type="button"
+                onClick={() => handlePersonaSwitch("buyer")}
+                className={`flex items-center gap-1 px-2 sm:px-3 py-1 rounded-full text-xs transition-all duration-200 ${
+                  activePersona === "buyer"
+                    ? "bg-background text-foreground shadow-xs font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                title="Switch to Buyer Mode"
+                data-testid="persona-btn-buyer"
+              >
+                <span>🏢</span>
+                <span className="hidden md:inline font-semibold">Buyer Mode</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePersonaSwitch("contractor")}
+                className={`flex items-center gap-1 px-2 sm:px-3 py-1 rounded-full text-xs transition-all duration-200 ${
+                  activePersona === "contractor"
+                    ? "bg-background text-foreground shadow-xs font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                title="Switch to Contractor Mode"
+                data-testid="persona-btn-contractor"
+              >
+                <span>🔨</span>
+                <span className="hidden md:inline font-semibold">Contractor Mode</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePersonaSwitch("admin")}
+                className={`flex items-center gap-1 px-2 sm:px-3 py-1 rounded-full text-xs transition-all duration-200 ${
+                  activePersona === "admin"
+                    ? "bg-background text-foreground shadow-xs font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                title="Switch to Revenue Admin"
+                data-testid="persona-btn-admin"
+              >
+                <span>📊</span>
+                <span className="hidden md:inline font-semibold">Revenue Admin</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1 sm:gap-2">
               {/* Bharat Multilingual Switcher */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

@@ -336,6 +336,13 @@ async function findOfferById(offerId: string): Promise<AffiliateOffer | null> {
   return fallback || null;
 }
 
+interface ContextualCacheEntry {
+  data: AffiliateOffer[];
+  expiresAt: number;
+}
+const contextualCache = new Map<string, ContextualCacheEntry>();
+const CACHE_TTL_MS = 5000; // 5-second TTL
+
 /**
  * GET /api/affiliate/contextual
  * Query params: category, title
@@ -347,6 +354,14 @@ export async function handleGetContextual(req: Request, res: Response): Promise<
 
     const cleanCategory = rawCategory.toLowerCase().trim();
     const cleanTitle = rawTitle.toLowerCase().trim();
+    const cacheKey = `${cleanCategory}:::${cleanTitle}`;
+
+    // Fast-path: 5s LRU cache hit (< 1ms latency)
+    const cached = contextualCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      res.status(200).json(cached.data);
+      return;
+    }
 
     const searchTokens = [
       ...cleanCategory.split(/[\s,_\-\/]+/),
@@ -383,20 +398,23 @@ export async function handleGetContextual(req: Request, res: Response): Promise<
       }
     }
 
+    let finalOffers: AffiliateOffer[];
     if (scoredOffers.length > 0) {
       scoredOffers.sort((a, b) => b.score - a.score);
-      const results = scoredOffers.map((s) => s.offer);
-      res.status(200).json(results);
-      return;
+      finalOffers = scoredOffers.map((s) => s.offer);
+    } else {
+      // Fallback: If no direct match, return top active finance/credit and bulk material offers
+      // (e.g. Lendingkart MSME loan, JSW Steel, myBillBook)
+      const fallbackTopOffers = allOffers.filter((o) =>
+        ["Lendingkart Finance", "JSW One MSME", "myBillBook (FloBiz)", "Shriram Finance"].includes(o.partner_name)
+      );
+      finalOffers = fallbackTopOffers.length > 0 ? fallbackTopOffers : allOffers.slice(0, 4);
     }
 
-    // Fallback: If no direct match, return top active finance/credit and bulk material offers
-    // (e.g. Lendingkart MSME loan, JSW Steel, myBillBook)
-    const fallbackTopOffers = allOffers.filter((o) =>
-      ["Lendingkart Finance", "JSW One MSME", "myBillBook (FloBiz)", "Shriram Finance"].includes(o.partner_name)
-    );
+    // Save to 5s TTL cache and prune if large
+    if (contextualCache.size > 200) contextualCache.clear();
+    contextualCache.set(cacheKey, { data: finalOffers, expiresAt: Date.now() + CACHE_TTL_MS });
 
-    const finalOffers = fallbackTopOffers.length > 0 ? fallbackTopOffers : allOffers.slice(0, 4);
     res.status(200).json(finalOffers);
   } catch (error: any) {
     console.error("Error in /api/affiliate/contextual:", error);

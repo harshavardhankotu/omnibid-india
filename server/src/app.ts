@@ -4,7 +4,11 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
+import { httpCompression } from "./middlewares/compression.js";
+
 const app: Express = express();
+
+app.use(httpCompression);
 
 app.use(
   pinoHttp({

@@ -30,6 +30,9 @@ import escrowRouter from "./escrow";
 import webhookRouter from "./webhook";
 import revenuePaymentsRouter from "./revenue-payments.js";
 import affiliateRouter from "./affiliate.js";
+import smartParserRouter from "./smart-parser.js";
+import pushRouter from "./push.js";
+import broadcastsRouter from "./broadcasts.js";
 
 const router: IRouter = Router();
 
@@ -39,6 +42,9 @@ router.use("/payments", revenuePaymentsRouter);
 router.use(revenuePaymentsRouter);
 router.use("/affiliate", affiliateRouter);
 router.use(affiliateRouter);
+router.use(smartParserRouter);
+router.use(pushRouter);
+router.use(broadcastsRouter);
 
 router.use(healthRouter);
 router.use(authRouter);
