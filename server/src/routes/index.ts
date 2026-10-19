@@ -28,11 +28,17 @@ import webhooksRouter from "./webhooks";
 import kycRouter from "./kyc";
 import escrowRouter from "./escrow";
 import webhookRouter from "./webhook";
+import revenuePaymentsRouter from "./revenue-payments.js";
+import affiliateRouter from "./affiliate.js";
 
 const router: IRouter = Router();
 
 router.use(escrowRouter);
 router.use(webhookRouter);
+router.use("/payments", revenuePaymentsRouter);
+router.use(revenuePaymentsRouter);
+router.use("/affiliate", affiliateRouter);
+router.use(affiliateRouter);
 
 router.use(healthRouter);
 router.use(authRouter);

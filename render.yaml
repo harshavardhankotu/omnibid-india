@@ -1,9 +1,9 @@
-# Render Blueprint configuration for deploying OmniBid India & Affiliate Marketing Suite
+# Render Blueprint configuration for zero-cost deployment of OmniBid India & Affiliate Marketing Suite
 services:
   - type: web
     name: omnibid-server
     runtime: node
-    plan: starter
+    plan: free
     buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @omnibid/server build
     startCommand: pnpm --filter @omnibid/server start
     envVars:
@@ -35,18 +35,14 @@ services:
     runtime: docker
     dockerfilePath: ./affiliate-suite/Dockerfile
     dockerContext: ./affiliate-suite
-    plan: starter
-    disk:
-      name: affiliate-data
-      mountPath: /var/data
-      sizeGB: 1
+    plan: free
     envVars:
       - key: FLASK_ENV
         value: production
       - key: PORT
         value: 5000
       - key: SQLITE_DB_PATH
-        value: /var/data/affiliate.db
+        value: /tmp/affiliate.db
       - key: FLASK_SECRET_KEY
         generateValue: true
       - key: POSTBACK_SECRET

@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { RazorpayCheckoutModal } from "@/components/razorpay-checkout-modal";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,12 +25,14 @@ import {
   Scale,
   Settings,
   Shield,
+  Sparkles,
   User,
   CreditCard,
   IndianRupee,
   TrendingUp,
   MapPin,
   Globe,
+  Coins,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
@@ -50,6 +54,13 @@ export default function Layout({ children }: LayoutProps) {
     logout();
     setLocation("/");
   };
+
+  const [showProModal, setShowProModal] = useState(false);
+
+  const isPro =
+    (user as any)?.subscriptionTier === "pro" ||
+    (user as any)?.subscription_tier === "pro" ||
+    (typeof window !== "undefined" && localStorage.getItem("omnibid_pro_active") === "true");
 
   const isProvider =
     user?.role === "provider" ||
@@ -120,6 +131,24 @@ export default function Layout({ children }: LayoutProps) {
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              {/* OmniBid Pro Badge / Upgrade Trigger */}
+              {isPro ? (
+                <Badge className="bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/40 text-[11px] font-bold uppercase tracking-wider hidden sm:flex items-center gap-1 px-2.5 py-1 shadow-sm">
+                  <Sparkles className="h-3 w-3 fill-amber-500 text-amber-500" /> PRO CONTRACTOR
+                </Badge>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 text-xs font-semibold hidden sm:flex items-center gap-1 shadow-sm h-8"
+                  onClick={() => setShowProModal(true)}
+                  data-testid="button-upgrade-pro"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+                  <span>⭐ Upgrade to Pro (₹999/mo)</span>
+                </Button>
+              )}
+
               {user ? (
                 <>
                   {isBuyer && (
@@ -160,6 +189,20 @@ export default function Layout({ children }: LayoutProps) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-56">
+                      {isPro ? (
+                        <div className="px-2 py-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1 bg-amber-500/10 rounded-sm mb-1">
+                          <Sparkles className="h-3.5 w-3.5 fill-amber-500 text-amber-500" /> PRO CONTRACTOR ACTIVE
+                        </div>
+                      ) : (
+                        <DropdownMenuItem
+                          onClick={() => setShowProModal(true)}
+                          className="text-amber-600 dark:text-amber-400 font-semibold cursor-pointer"
+                        >
+                          <Sparkles className="h-4 w-4 mr-2 text-amber-500" />
+                          ⭐ Upgrade to Pro (₹999/mo)
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
                       {isBuyer && (
                         <DropdownMenuItem onClick={() => setLocation("/dashboard/buyer")} data-testid="menu-buyer-dashboard">
                           <LayoutDashboard className="h-4 w-4 mr-2" />
@@ -218,6 +261,10 @@ export default function Layout({ children }: LayoutProps) {
                       {isAdmin && (
                         <>
                           <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => setLocation("/admin/revenue")} data-testid="menu-revenue-center">
+                            <Coins className="h-4 w-4 mr-2 text-emerald-600" />
+                            <span className="font-semibold text-emerald-600">Revenue Center</span>
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => setLocation("/admin")} data-testid="menu-admin">
                             <Shield className="h-4 w-4 mr-2 text-red-500" />
                             <span className="text-red-600">Admin Panel</span>
@@ -255,6 +302,15 @@ export default function Layout({ children }: LayoutProps) {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {children}
       </main>
+
+      <RazorpayCheckoutModal
+        isOpen={showProModal}
+        onClose={() => setShowProModal(false)}
+        type="pro_subscription"
+        onSuccess={() => {
+          localStorage.setItem("omnibid_pro_active", "true");
+        }}
+      />
     </div>
   );
 }

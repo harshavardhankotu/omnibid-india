@@ -10,6 +10,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 dotenv.config();
 
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 const { Pool } = pg;
 
 // 1. Runtime API connection string: Port 6543 (Supabase Transaction Pooler)
@@ -27,7 +29,7 @@ const getSSLConfig = (connStr: string) => {
   if (isLocal) return false;
   return {
     ca: caCert,
-    rejectUnauthorized: true,
+    rejectUnauthorized: false,
   };
 };
 

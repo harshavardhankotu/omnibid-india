@@ -25,6 +25,12 @@ const TRANSLATIONS: Record<SupportedLanguage, Record<string, string>> = {
     two_envelope: "Two-Envelope Technical & Financial Sealed Bidding",
     milestone_payout: "Milestone-Linked Escrow Disbursements",
     verified_contractor: "DigiLocker & GST Verified Contractor",
+    unlock_buyer_contact: "Unlock Direct Buyer Contact (₹99)",
+    pro_upgrade: "Upgrade to Pro Contractor (₹999/mo)",
+    fund_escrow: "Fund Escrow & Award L1 Bid",
+    tds_deduction: "Section 194C TDS",
+    platform_fee: "OmniBid 2% Platform Fee",
+    net_payout: "Net Contractor Settlement",
   },
   hi: {
     browse: "ब्राउज़ करें",
@@ -42,6 +48,12 @@ const TRANSLATIONS: Record<SupportedLanguage, Record<string, string>> = {
     two_envelope: "दो-लिफाफा तकनीकी और वित्तीय सीलबंद बोली",
     milestone_payout: "माइलस्टोन-आधारित एस्क्रो भुगतान",
     verified_contractor: "डिजिलॉकर और जीएसटी सत्यापित ठेकेदार",
+    unlock_buyer_contact: "सीधा खरीदार संपर्क अनलॉक करें (₹99)",
+    pro_upgrade: "प्रो ठेकेदार में अपग्रेड करें (₹999/माह)",
+    fund_escrow: "एस्क्रो फंड करें और L1 बोली स्वीकृत करें",
+    tds_deduction: "धारा 194C टीडीएस",
+    platform_fee: "ओम्नीबिड 2% प्लेटफॉर्म शुल्क",
+    net_payout: "शुद्ध ठेकेदार भुगतान",
   },
   te: {
     browse: "బ్రౌజ్ చేయండి",
@@ -59,6 +71,12 @@ const TRANSLATIONS: Record<SupportedLanguage, Record<string, string>> = {
     two_envelope: "రెండు-కవర్ల సాంకేతిక & ఆర్థిక సీల్డ్ బిడ్డింగ్",
     milestone_payout: "మైలురాళ్ల ఆధారిత ఎస్క్రో నిధుల విడుదల",
     verified_contractor: "డిజిలాకర్ & జీఎస్టీ ధృవీకరించబడిన కాంట్రాక్టర్",
+    unlock_buyer_contact: "ప్రత్యక్ష కొనుగోలుదారు పరిచయాన్ని అన్‌లాక్ చేయండి (₹99)",
+    pro_upgrade: "ప్రో కాంట్రాక్టర్‌గా అప్‌గ్రేడ్ అవ్వండి (₹999/నెలకు)",
+    fund_escrow: "ఎస్క్రో నిధులు సమకూర్చి L1 బిడ్‌ను కేటాయించండి",
+    tds_deduction: "సెక్షన్ 194C టిడిఎస్",
+    platform_fee: "ఓమ్నీబిడ్ 2% ప్లాట్‌ఫారమ్ రుసుము",
+    net_payout: "నికర కాంట్రాక్టర్ పరిష్కారం",
   },
 };
 

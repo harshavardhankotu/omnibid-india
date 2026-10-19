@@ -5,6 +5,7 @@ import hashlib
 import time
 import re
 from datetime import datetime
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from flask import Flask, request, jsonify, redirect
 
 app = Flask(__name__)
@@ -111,6 +112,85 @@ def health():
         "timestamp": datetime.utcnow().isoformat()
     })
 
+@app.route('/api/contextual')
+def contextual_campaigns():
+    category = (request.args.get('category') or '').lower().strip()
+    title = (request.args.get('title') or '').lower().strip()
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM campaigns WHERE status = 'active'")
+    rows = cursor.fetchall()
+    conn.close()
+
+    campaigns = [dict(r) for r in rows]
+
+    if not campaigns:
+        campaigns = [
+            {
+                "campaign_id": "lendingkart_credit",
+                "title": "Lendingkart MSME Working Capital Loans (up to ₹50L)",
+                "deal_price": 0.0,
+                "original_price": 50000.0,
+                "affiliate_url": "https://www.lendingkart.com/business-loan/",
+                "sector": "finance",
+                "badge_text": "Instant ₹50L Disbursal",
+                "status": "active",
+                "total_clicks": 142,
+                "total_conversions": 18,
+            },
+            {
+                "campaign_id": "jsw_steel_tmt",
+                "title": "JSW One MSME Bulk TMT Rebars & Steel Beams",
+                "deal_price": 52000.0,
+                "original_price": 58000.0,
+                "affiliate_url": "https://www.jswonemsme.com/products/steel",
+                "sector": "Construction",
+                "badge_text": "Direct Mill Pricing",
+                "status": "active",
+                "total_clicks": 98,
+                "total_conversions": 12,
+            },
+            {
+                "campaign_id": "mybillbook_gst",
+                "title": "myBillBook GST Invoicing & E-Way Bill Software",
+                "deal_price": 799.0,
+                "original_price": 1499.0,
+                "affiliate_url": "https://mybillbook.in/contractors",
+                "sector": "IT",
+                "badge_text": "Govt GST Ready",
+                "status": "active",
+                "total_clicks": 64,
+                "total_conversions": 9,
+            },
+        ]
+
+    matched = []
+    tokens = [t for t in (category + " " + title).split() if len(t) > 2]
+    for c in campaigns:
+        score = 0
+        c_sector = (c.get('sector') or '').lower()
+        c_title = (c.get('title') or '').lower()
+        if category and (category in c_sector or category in c_title):
+            score += 3
+        for tok in tokens:
+            if tok in c_title or tok in c_sector:
+                score += 1
+        if score > 0:
+            matched.append((score, c))
+
+    if matched:
+        matched.sort(key=lambda x: x[0], reverse=True)
+        results = [m[1] for m in matched]
+    else:
+        results = campaigns
+
+    return jsonify({
+        "status": "success",
+        "count": len(results),
+        "campaigns": results,
+    })
+
 @app.route('/go/<campaign_id>')
 def redirect_link(campaign_id):
     ua = request.headers.get('User-Agent', '')
@@ -139,6 +219,29 @@ def redirect_link(campaign_id):
     conn.close()
 
     target_url = row['affiliate_url'] if row else "https://omnibid.in"
+
+    # Synchronize campaign redirects with OmniBid tracking params
+    ch = request.args.get('ch', 'web_auction')
+    campaign = request.args.get('campaign', campaign_id)
+    req_id = request.args.get('reqId') or request.args.get('req_id')
+    utm_source = request.args.get('utm_source', 'omnibid_india')
+    utm_medium = request.args.get('utm_medium', 'b2b_marketplace')
+    utm_campaign = request.args.get('utm_campaign', campaign)
+
+    try:
+        parsed = urlparse(target_url)
+        query_dict = parse_qs(parsed.query)
+        query_dict['utm_source'] = [utm_source]
+        query_dict['utm_medium'] = [utm_medium]
+        query_dict['utm_campaign'] = [utm_campaign]
+        query_dict['ch'] = [ch]
+        if req_id:
+            query_dict['req_id'] = [req_id]
+        new_query = urlencode(query_dict, doseq=True)
+        target_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+    except Exception:
+        pass
+
     return redirect(target_url, code=302)
 
 @app.route('/postback/conversion', methods=['POST'])

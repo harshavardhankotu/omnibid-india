@@ -1,6 +1,5 @@
-import { pgTable, text, timestamp, uuid, numeric, integer, jsonb, pgEnum, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, numeric, integer, bigint, boolean, varchar, jsonb, pgEnum, index, pgView } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
-import { pgView } from "drizzle-orm/pg-core";
 
 // Enums
 export const userRoleEnum = pgEnum("user_role", ["buyer", "provider", "admin"]);
@@ -25,6 +24,10 @@ export const users = pgTable("users", {
   city: text("city").notNull().default("Bengaluru"),
   state_code: text("state_code").notNull().default("29"), // Indian 2-digit GST state code (29=Karnataka)
   entity_type: text("entity_type").notNull().default("individual"), // "individual" | "company" | "llp" | "huf"
+  gstin: varchar("gstin", { length: 15 }),
+  digilocker_verified: boolean("digilocker_verified").notNull().default(false),
+  subscription_tier: varchar("subscription_tier", { length: 20 }).notNull().default("free").$type<"free" | "pro">(),
+  pro_expires_at: timestamp("pro_expires_at", { withTimezone: true }),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -37,6 +40,8 @@ export const requirements = pgTable(
     title: text("title").notNull(),
     sector: sectorEnum("sector").notNull(),
     budget: numeric("budget", { precision: 12, scale: 2 }).notNull(),
+    budget_inr: numeric("budget_inr", { precision: 14, scale: 2 }),
+    language: varchar("language", { length: 10 }).notNull().default("en"),
     timeline: text("timeline").notNull(), // e.g., "30 days"
     status: requirementStatusEnum("status").notNull().default("open"),
     custom_data: jsonb("custom_data").$type<Record<string, any>>().default({}),
@@ -45,6 +50,7 @@ export const requirements = pgTable(
   (table) => [
     index("idx_requirements_sector_status").on(table.sector, table.status),
     index("idx_requirements_buyer_id").on(table.buyer_id),
+    index("idx_requirements_budget_inr").on(table.budget_inr),
   ]
 );
 
@@ -57,13 +63,17 @@ export const bids = pgTable(
     provider_id: uuid("provider_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     proposal_text: text("proposal_text").notNull(),
     bid_amount: numeric("bid_amount", { precision: 12, scale: 2 }).notNull(),
+    amount_inr: numeric("amount_inr", { precision: 14, scale: 2 }),
     milestone_count: integer("milestone_count").notNull().default(1),
     status: bidStatusEnum("status").notNull().default("pending"),
+    rank_status: varchar("rank_status", { length: 20 }).notNull().default("active").$type<"active" | "l1_leader" | "l2" | "l3" | "outbid">(),
     created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("idx_bids_req_provider").on(table.requirement_id, table.provider_id),
     index("idx_bids_status").on(table.status),
+    index("idx_bids_rank_status").on(table.rank_status),
+    index("idx_bids_amount_inr").on(table.amount_inr),
   ]
 );
 
@@ -132,17 +142,88 @@ export const invoice_sequences = pgTable(
   }
 );
 
+// 8. Revenue Transactions Table
+export const revenue_transactions = pgTable(
+  "revenue_transactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    user_id: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    requirement_id: uuid("requirement_id").references(() => requirements.id, { onDelete: "set null" }),
+    type: varchar("type", { length: 30 }).notNull().$type<"escrow_deposit" | "lead_unlock" | "pro_subscription">(),
+    gross_amount_paise: bigint("gross_amount_paise", { mode: "number" }).notNull(),
+    platform_fee_paise: bigint("platform_fee_paise", { mode: "number" }).notNull().default(0),
+    tds_194c_paise: bigint("tds_194c_paise", { mode: "number" }).notNull().default(0),
+    net_settlement_paise: bigint("net_settlement_paise", { mode: "number" }).notNull().default(0),
+    razorpay_order_id: varchar("razorpay_order_id", { length: 100 }),
+    razorpay_payment_id: varchar("razorpay_payment_id", { length: 100 }),
+    status: varchar("status", { length: 30 }).notNull().default("created").$type<"created" | "paid" | "settled" | "refunded">(),
+    metadata: jsonb("metadata").$type<Record<string, any>>().default({}),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_rev_txn_status").on(table.status),
+    index("idx_rev_txn_user_id").on(table.user_id),
+    index("idx_rev_txn_requirement_id").on(table.requirement_id),
+    index("idx_rev_txn_created_at").on(table.created_at),
+  ]
+);
+
+// 9. Affiliate Offers Table
+export const affiliate_offers = pgTable(
+  "affiliate_offers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: varchar("title", { length: 255 }).notNull(),
+    category_keywords: text("category_keywords").array().notNull(),
+    partner_name: varchar("partner_name", { length: 100 }).notNull(),
+    target_url: text("target_url").notNull(),
+    commission_type: varchar("commission_type", { length: 20 }).notNull().default("cpc").$type<"cpc" | "cpa" | "rev_share">(),
+    cpc_or_cpa_inr: numeric("cpc_or_cpa_inr", { precision: 10, scale: 2 }).notNull().default("0.00"),
+    badge_text: varchar("badge_text", { length: 50 }).default("Sponsored Partner"),
+    cta_text: varchar("cta_text", { length: 100 }).default("Check Eligibility"),
+    active: boolean("active").notNull().default(true),
+    created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_affiliate_offers_active").on(table.active),
+    index("idx_affiliate_offers_created_at").on(table.created_at),
+  ]
+);
+
+// 10. Affiliate Clicks Table
+export const affiliate_clicks = pgTable(
+  "affiliate_clicks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    offer_id: uuid("offer_id").notNull().references(() => affiliate_offers.id, { onDelete: "cascade" }),
+    requirement_id: uuid("requirement_id").references(() => requirements.id, { onDelete: "set null" }),
+    source_channel: varchar("source_channel", { length: 50 }).notNull().$type<"web_auction" | "whatsapp_broadcast" | "telegram_auto">(),
+    visitor_ip_hash: varchar("visitor_ip_hash", { length: 64 }).notNull(),
+    utm_campaign: varchar("utm_campaign", { length: 100 }).default("omnibid_live"),
+    clicked_at: timestamp("clicked_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_affiliate_clicks_offer_id").on(table.offer_id),
+    index("idx_affiliate_clicks_requirement_id").on(table.requirement_id),
+    index("idx_affiliate_clicks_clicked_at").on(table.clicked_at),
+  ]
+);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   requirements: many(requirements),
   bids: many(bids),
   disputes: many(disputes),
+  revenue_transactions: many(revenue_transactions),
 }));
 
 export const requirementsRelations = relations(requirements, ({ one, many }) => ({
   buyer: one(users, { fields: [requirements.buyer_id], references: [users.id] }),
   bids: many(bids),
   escrow_payments: many(escrow_payments),
+  revenue_transactions: many(revenue_transactions),
+  affiliate_clicks: many(affiliate_clicks),
 }));
 
 export const bidsRelations = relations(bids, ({ one, many }) => ({
@@ -160,6 +241,20 @@ export const escrowPaymentsRelations = relations(escrow_payments, ({ one, many }
 export const disputesRelations = relations(disputes, ({ one }) => ({
   escrow_payment: one(escrow_payments, { fields: [disputes.escrow_id], references: [escrow_payments.id] }),
   opened_by_user: one(users, { fields: [disputes.opened_by], references: [users.id] }),
+}));
+
+export const revenueTransactionsRelations = relations(revenue_transactions, ({ one }) => ({
+  user: one(users, { fields: [revenue_transactions.user_id], references: [users.id] }),
+  requirement: one(requirements, { fields: [revenue_transactions.requirement_id], references: [requirements.id] }),
+}));
+
+export const affiliateOffersRelations = relations(affiliate_offers, ({ many }) => ({
+  clicks: many(affiliate_clicks),
+}));
+
+export const affiliateClicksRelations = relations(affiliate_clicks, ({ one }) => ({
+  offer: one(affiliate_offers, { fields: [affiliate_clicks.offer_id], references: [affiliate_offers.id] }),
+  requirement: one(requirements, { fields: [affiliate_clicks.requirement_id], references: [requirements.id] }),
 }));
 
 // Pre-aggregated Analytical Views
@@ -217,3 +312,25 @@ export const vwTrustAndDisputes = pgView("vw_trust_and_disputes", {
   LEFT JOIN disputes d ON d.escrow_id = ep.id
   GROUP BY r.sector
 `);
+
+// Infer Types
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type Requirement = typeof requirements.$inferSelect;
+export type NewRequirement = typeof requirements.$inferInsert;
+export type Bid = typeof bids.$inferSelect;
+export type NewBid = typeof bids.$inferInsert;
+export type EscrowPayment = typeof escrow_payments.$inferSelect;
+export type NewEscrowPayment = typeof escrow_payments.$inferInsert;
+export type Dispute = typeof disputes.$inferSelect;
+export type NewDispute = typeof disputes.$inferInsert;
+export type WebhookEvent = typeof webhook_events.$inferSelect;
+export type NewWebhookEvent = typeof webhook_events.$inferInsert;
+export type InvoiceSequence = typeof invoice_sequences.$inferSelect;
+export type NewInvoiceSequence = typeof invoice_sequences.$inferInsert;
+export type RevenueTransaction = typeof revenue_transactions.$inferSelect;
+export type NewRevenueTransaction = typeof revenue_transactions.$inferInsert;
+export type AffiliateOffer = typeof affiliate_offers.$inferSelect;
+export type NewAffiliateOffer = typeof affiliate_offers.$inferInsert;
+export type AffiliateClick = typeof affiliate_clicks.$inferSelect;
+export type NewAffiliateClick = typeof affiliate_clicks.$inferInsert;

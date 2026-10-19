@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Layers, Lock, RotateCcw, CheckCircle2, AlertTriangle,
   Plus, Trash2, Trophy, BarChart3, Users, Gavel,
-  Radio, Activity, Zap, TrendingDown,
+  Radio, Activity, Zap, TrendingDown, Sparkles, ExternalLink,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -90,6 +90,38 @@ export default function AdvancedAuction() {
   const [liveBids, setLiveBids] = useState<Array<{ id: string; amount: number; status: string; createdAt: string }>>([]);
   const [streamConnected, setStreamConnected] = useState(false);
   const [lastHeartbeat, setLastHeartbeat] = useState<string>("");
+  const [activeCreditTickerIndex, setActiveCreditTickerIndex] = useState(0);
+
+  const creditOffers = [
+    {
+      id: "00000000-0000-0000-0000-000000000001",
+      partner: "Lendingkart Finance",
+      title: "MSME Working Capital Loan up to ₹50L",
+      badge: "Instant Approval • ₹0 Fee",
+      cta: "Check Credit Line",
+    },
+    {
+      id: "00000000-0000-0000-0000-000000000002",
+      partner: "JSW One MSME",
+      title: "Direct Mill Pricing on TMT Rebars & Steel",
+      badge: "Save 8-12% on Materials",
+      cta: "Get Mill Rate Quote",
+    },
+    {
+      id: "00000000-0000-0000-0000-000000000004",
+      partner: "Shriram Finance",
+      title: "Commercial Equipment & Tipper Financing",
+      badge: "Lowest EMI 8.5%",
+      cta: "Check Vehicle Eligibility",
+    },
+    {
+      id: "00000000-0000-0000-0000-000000000005",
+      partner: "myBillBook (FloBiz)",
+      title: "Contractor GST Invoicing & E-Way Software",
+      badge: "Govt GST Certified",
+      cta: "Start Free Trial",
+    },
+  ];
 
   useEffect(() => {
     if (activeTab !== "live-stream" || !requirementId) return;
@@ -412,6 +444,64 @@ export default function AdvancedAuction() {
                   <Badge variant={streamConnected ? "default" : "secondary"} className="text-xs">
                     {streamConnected ? "LIVE TICKER" : "DISCONNECTED"}
                   </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Interactive Ticker Banner: Working Capital & Raw Material Credit */}
+            <Card className="border-amber-400/40 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent dark:from-amber-950/30 overflow-hidden shadow-xs">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0">
+                      <Sparkles className="h-4 w-4 fill-amber-500" />
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider border-amber-500/50 text-amber-700 dark:text-amber-300 bg-amber-500/10 px-1.5 py-0">
+                          ⚡ Working Capital &amp; Raw Material Credit
+                        </Badge>
+                        <span className="text-xs font-bold text-foreground">
+                          {creditOffers[activeCreditTickerIndex].partner}:
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {creditOffers[activeCreditTickerIndex].title}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                          {creditOffers[activeCreditTickerIndex].badge}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">• Backed by OmniBid Institutional Partner Network</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
+                    <div className="flex items-center gap-1">
+                      {creditOffers.map((_, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setActiveCreditTickerIndex(idx)}
+                          className={`h-1.5 rounded-full transition-all ${activeCreditTickerIndex === idx ? "w-5 bg-amber-500" : "w-1.5 bg-muted-foreground/30"}`}
+                          title={`Switch to offer ${idx + 1}`}
+                          data-testid={`button-ticker-dot-${idx}`}
+                        />
+                      ))}
+                    </div>
+
+                    <a
+                      href={`/api/affiliate/r/${creditOffers[activeCreditTickerIndex].id}?reqId=${requirementId || ""}&ch=web_auction&campaign=war_room_ticker`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center rounded-md text-xs font-semibold px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white transition-colors shadow-xs ml-2 whitespace-nowrap"
+                      data-testid="link-warroom-affiliate-credit"
+                    >
+                      <span>{creditOffers[activeCreditTickerIndex].cta}</span>
+                      <ExternalLink className="h-3 w-3 ml-1.5" />
+                    </a>
+                  </div>
                 </div>
               </CardContent>
             </Card>

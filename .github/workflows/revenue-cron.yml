@@ -1,0 +1,28 @@
+name: Revenue Engine Anti-Sleep & Autonomous Cycle Cron
+
+on:
+  schedule:
+    # Runs every 14 minutes to prevent Render free-tier spinning down (cold start prevention)
+    - cron: '*/14 * * * *'
+  workflow_dispatch:
+
+jobs:
+  keep-alive-and-monetize:
+    name: Anti-Sleep Ping & Affiliate Cycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Warm Up Backend & Check Health
+        run: |
+          RENDER_URL="${{ secrets.RENDER_API_URL || 'https://prompt-understander-1.onrender.com' }}"
+          echo "Pinging health endpoint at: $RENDER_URL/api/health"
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" --max-time 30 "$RENDER_URL/api/health" || echo "FAIL")
+          echo "$RESPONSE"
+
+      - name: Trigger Autonomous Affiliate Monetization Cycle
+        run: |
+          RENDER_URL="${{ secrets.RENDER_API_URL || 'https://prompt-understander-1.onrender.com' }}"
+          echo "Triggering autonomous affiliate deal cycle at: $RENDER_URL/api/affiliate/autonomous-cycle"
+          RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d '{"channel":"all"}' --max-time 30 "$RENDER_URL/api/affiliate/autonomous-cycle" || echo "FAIL")
+          echo "$RESPONSE"

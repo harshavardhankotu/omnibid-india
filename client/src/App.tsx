@@ -31,6 +31,7 @@ import MarketIntelligence from "@/pages/market-intelligence";
 import Tracking from "@/pages/tracking";
 import AdvancedAuction from "@/pages/advanced-auction";
 import AdminDashboard from "@/pages/admin-dashboard";
+import AdminRevenue from "@/pages/admin-revenue";
 import MarketplacePage from "@/pages/marketplace";
 import EscrowCheckoutPage from "@/pages/escrow-checkout";
 
@@ -85,6 +86,7 @@ function Router() {
       <Route path="/referral" component={Referral} />
       <Route path="/admin" component={Admin} />
       <Route path="/admin/dashboard" component={AdminDashboard} />
+      <Route path="/admin/revenue" component={AdminRevenue} />
       <Route path="/qa" component={QA} />
       <Route path="/qa/test-cases" component={QA} />
       <Route path="/finance" component={Finance} />

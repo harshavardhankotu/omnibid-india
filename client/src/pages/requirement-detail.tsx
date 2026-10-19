@@ -38,6 +38,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { getCategoryIcon } from "@/lib/category-icons";
+import { useI18n } from "@/lib/i18n";
+import { RazorpayCheckoutModal } from "@/components/razorpay-checkout-modal";
 import {
   AlertCircle,
   CheckCircle2,
@@ -53,6 +55,8 @@ import {
   RefreshCw,
   Scale,
   Shield,
+  Smartphone,
+  Sparkles,
   Star,
   Trophy,
   User,
@@ -60,6 +64,17 @@ import {
   Users,
   Zap,
 } from "lucide-react";
+
+interface ContextualOffer {
+  id: string;
+  title: string;
+  partner_name: string;
+  target_url: string;
+  commission_type: string;
+  cpc_or_cpa_inr: string;
+  badge_text?: string;
+  cta_text?: string;
+}
 
 type SortBy = "lowest_price" | "highest_rating" | "fastest_start";
 
@@ -69,12 +84,53 @@ export default function RequirementDetail() {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { t } = useI18n();
   const [sortBy, setSortBy] = useState<SortBy>("lowest_price");
   const [disputeBid, setDisputeBid] = useState<Bid | null>(null);
   const [disputeTitle, setDisputeTitle] = useState("");
   const [disputeDesc, setDisputeDesc] = useState("");
   const [smartMatchData, setSmartMatchData] = useState<{ recommendedBidId: string | null; justification: string | null } | null>(null);
   const [isSmartMatching, setIsSmartMatching] = useState(false);
+
+  const [leadUnlockedData, setLeadUnlockedData] = useState<{
+    unlocked: boolean;
+    buyerContact?: { phone: string; email: string; name: string };
+  } | null>(null);
+
+  const [checkoutModalConfig, setCheckoutModalConfig] = useState<{
+    isOpen: boolean;
+    type: "lead_unlock" | "pro_subscription" | "escrow_deposit";
+    requirementId?: string;
+    bidId?: string;
+    bidAmount?: number;
+    sellerGstinOrPan?: string;
+    requirementTitle?: string;
+  }>({
+    isOpen: false,
+    type: "lead_unlock",
+  });
+
+  const fetchLeadUnlockStatus = async () => {
+    if (!id) return;
+    const token = localStorage.getItem("omnibid_token");
+    try {
+      const res = await fetch(`/api/payments/lead-unlocked/${id}`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLeadUnlockedData(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch lead unlock status:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchLeadUnlockStatus();
+  }, [id, user]);
 
   const { data: req, isLoading } = useGetRequirement(id, {
     query: {
@@ -85,6 +141,45 @@ export default function RequirementDetail() {
       },
     },
   });
+
+  const [affiliateOffers, setAffiliateOffers] = useState<ContextualOffer[]>([]);
+  const [isLoadingOffers, setIsLoadingOffers] = useState(false);
+
+  useEffect(() => {
+    if (!id || !req) return;
+    const fetchOffers = async () => {
+      setIsLoadingOffers(true);
+      try {
+        const cat = (req as any)?.category || (req as any)?.sector || "";
+        const ttl = req?.title || "";
+        const res = await fetch(
+          `/api/affiliate/contextual?category=${encodeURIComponent(cat)}&title=${encodeURIComponent(ttl)}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setAffiliateOffers(data);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch contextual affiliate offers:", e);
+      } finally {
+        setIsLoadingOffers(false);
+      }
+    };
+    fetchOffers();
+  }, [id, req?.title, (req as any)?.category, (req as any)?.sector]);
+
+  const topLoanOffer =
+    affiliateOffers.find(
+      (o) =>
+        o.partner_name?.toLowerCase().includes("lendingkart") ||
+        o.partner_name?.toLowerCase().includes("shriram") ||
+        o.title?.toLowerCase().includes("loan") ||
+        o.title?.toLowerCase().includes("capital")
+    ) || affiliateOffers[0];
+
+  const topLoanOfferId = topLoanOffer?.id || "00000000-0000-0000-0000-000000000001";
 
   const { data: stats } = useGetRequirementStats(id, {
     query: {
@@ -272,6 +367,12 @@ export default function RequirementDetail() {
 
   const Icon = req ? getCategoryIcon(req.categoryIconName) : null;
 
+  const l1Bid = req?.bids && req.bids.length > 0 ? [...req.bids].sort((a, b) => a.bidAmount - b.bidAmount)[0] : null;
+  const l1Gross = l1Bid ? l1Bid.bidAmount : 0;
+  const l1Fee = Math.round(l1Gross * 0.02);
+  const l1Tds = l1Gross > 30000 ? Math.round(l1Gross * 0.01) : 0;
+  const l1Net = Math.max(0, l1Gross - l1Fee - l1Tds);
+
   if (isLoading) {
     return (
       <Layout>
@@ -398,6 +499,107 @@ export default function RequirementDetail() {
               </Button>
             )}
 
+            {/* Direct Buyer Contact Unlock Box / Button for Non-Owners */}
+            {!isOwner && (
+              leadUnlockedData?.unlocked && leadUnlockedData.buyerContact ? (
+                <div className="mt-3 p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 dark:bg-emerald-950/20 text-left">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Direct Buyer Contact Unlocked
+                    </span>
+                    <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-medium">
+                      Verified Lead
+                    </Badge>
+                  </div>
+                  <div className="text-sm font-semibold text-foreground">{leadUnlockedData.buyerContact.name}</div>
+                  <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                    <p>📞 Phone: <span className="font-semibold text-foreground">{leadUnlockedData.buyerContact.phone}</span></p>
+                    <p>✉️ Email: <span className="font-semibold text-foreground">{leadUnlockedData.buyerContact.email}</span></p>
+                  </div>
+                  <a
+                    href={`https://wa.me/91${leadUnlockedData.buyerContact.phone.replace(/[^0-9]/g, "").slice(-10)}?text=${encodeURIComponent(
+                      `Hi ${leadUnlockedData.buyerContact.name}, I found your requirement "${req.title}" on OmniBid India and would like to discuss fulfillment.`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2.5 w-full inline-flex items-center justify-center rounded-md text-xs font-semibold py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-colors"
+                    data-testid="link-whatsapp-direct"
+                  >
+                    <MessageSquare className="h-3.5 w-3.5 mr-1.5" /> Chat on WhatsApp Directly
+                  </a>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="w-full mt-3 font-semibold border-blue-500/40 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 flex items-center justify-center gap-1.5 shadow-sm"
+                  onClick={() =>
+                    setCheckoutModalConfig({
+                      isOpen: true,
+                      type: "lead_unlock",
+                      requirementId: id,
+                      requirementTitle: req.title,
+                    })
+                  }
+                  data-testid="button-unlock-buyer-contact"
+                >
+                  <Smartphone className="h-4 w-4 text-blue-500" />
+                  Unlock Direct Buyer Contact (₹99 via UPI)
+                </Button>
+              )
+            )}
+
+            {/* Fund Escrow & Award L1 Bid with Dynamic Financial Breakdown for Buyer */}
+            {isOwner && l1Bid && ["open", "accepted"].includes(req.status) && (
+              <div className="mt-3 p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-500/5 dark:bg-emerald-950/20 text-left space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <Trophy className="h-3.5 w-3.5" /> L1 Lowest Bid: ₹{l1Gross.toLocaleString("en-IN")}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">{l1Bid.providerName}</span>
+                </div>
+
+                {/* Dynamic financial breakdown */}
+                <div className="text-xs space-y-1 bg-background/80 p-2.5 rounded-lg border border-border">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Gross Bid:</span>
+                    <span className="font-medium text-foreground">₹{l1Gross.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>{t("platform_fee")}:</span>
+                    <span className="font-medium text-foreground">₹{l1Fee.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>{t("tds_deduction")} {l1Gross > 30000 ? "(1% / 2%)" : "(Exempt)"}:</span>
+                    <span className="font-medium text-amber-600 dark:text-amber-400">
+                      -₹{l1Tds.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  <div className="border-t border-border pt-1 flex justify-between font-bold text-emerald-600 dark:text-emerald-400">
+                    <span>{t("net_payout")}:</span>
+                    <span>₹{l1Net.toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
+
+                <Button
+                  className="w-full font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-1.5 shadow-sm"
+                  onClick={() =>
+                    setCheckoutModalConfig({
+                      isOpen: true,
+                      type: "escrow_deposit",
+                      requirementId: id,
+                      bidId: l1Bid.id,
+                      bidAmount: l1Bid.bidAmount,
+                      requirementTitle: req.title,
+                    })
+                  }
+                  data-testid="button-fund-escrow-l1"
+                >
+                  <Shield className="h-4 w-4" />
+                  {t("fund_escrow")}
+                </Button>
+              </div>
+            )}
+
             {isOwner && req.status === "open" && req.bids.length > 0 && (
               <Button
                 className="w-full mt-3 font-semibold bg-violet-600 hover:bg-violet-700 text-white flex items-center justify-center gap-1.5"
@@ -481,12 +683,20 @@ export default function RequirementDetail() {
                 `📍 *Location*: ${req.city || "Pan India"}\n` +
                 `💰 *Budget*: ₹${Number(req.maxBudget || 0).toLocaleString("en-IN")}\n` +
                 `🛡️ *Security*: 100% Escrow Protected by OmniBid\n\n` +
-                `Submit your reverse bid now:\n${typeof window !== "undefined" ? window.location.href : ""}`
+                `⚡ *Live Reverse Auction & L1 War Room*:\n${typeof window !== "undefined" ? window.location.origin + "/auction/" + id : ""}\n\n` +
+                `💼 Need Working Capital for this job? Instant loan up to ₹50L: ` +
+                (typeof window !== "undefined" ? window.location.origin : "") +
+                "/api/affiliate/r/" +
+                topLoanOfferId +
+                "?reqId=" +
+                id +
+                "&ch=whatsapp_broadcast"
               )}`}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full mt-2 inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-green-600 hover:bg-green-700 text-white h-9 px-4 py-2"
               title="Share deal directly to contractor and vendor WhatsApp groups"
+              data-testid="button-broadcast-whatsapp"
             >
               <MessageSquare className="h-4 w-4 mr-1.5" />
               Broadcast to Contractor WhatsApp Groups
@@ -506,6 +716,76 @@ export default function RequirementDetail() {
               <Button className="w-full mt-3" onClick={() => setLocation("/login")} data-testid="button-login-to-bid">
                 Login to Place a Bid
               </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Sponsored Material & Working Capital Partners */}
+        <Card className="border-amber-300/60 bg-gradient-to-br from-amber-50/40 via-card to-card dark:from-amber-950/15 dark:border-amber-800/40 shadow-xs">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="p-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  <Sparkles className="h-4 w-4 fill-amber-500" />
+                </span>
+                <CardTitle className="text-base font-bold tracking-tight">
+                  Sponsored Material &amp; Working Capital Partners
+                </CardTitle>
+              </div>
+              <Badge variant="outline" className="text-[11px] font-semibold border-amber-500/40 text-amber-700 dark:text-amber-400">
+                Verified Partners
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Pre-approved credit lines and direct mill raw materials for contractors bidding on this job.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3 pt-0">
+            {isLoadingOffers && affiliateOffers.length === 0 ? (
+              <div className="py-4 text-center text-xs text-muted-foreground animate-pulse">
+                Matching verified institutional financing &amp; raw material partners...
+              </div>
+            ) : affiliateOffers.length === 0 ? (
+              <div className="py-4 text-center text-xs text-muted-foreground">
+                No sponsored partners matched for this sector.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {affiliateOffers.slice(0, 4).map((offer) => (
+                  <div
+                    key={offer.id}
+                    className="flex flex-col justify-between p-3 rounded-lg border border-border/70 bg-card hover:border-amber-500/50 hover:shadow-xs transition-all"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-1 mb-1.5">
+                        <span className="text-[11px] font-bold text-primary uppercase tracking-wide truncate max-w-[140px]">
+                          {offer.partner_name}
+                        </span>
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] px-1.5 py-0 h-4 bg-amber-500/15 text-amber-700 dark:text-amber-300 border-none font-medium whitespace-nowrap"
+                        >
+                          {offer.badge_text || "Instant Approval"}
+                        </Badge>
+                      </div>
+                      <h4 className="text-xs font-semibold text-foreground line-clamp-2 mb-2 leading-snug">
+                        {offer.title}
+                      </h4>
+                    </div>
+
+                    <a
+                      href={`/api/affiliate/r/${offer.id}?reqId=${id}&ch=web_auction`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full inline-flex items-center justify-center rounded-md text-xs font-semibold py-1.5 px-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 transition-colors"
+                      data-testid={`link-affiliate-${offer.id}`}
+                    >
+                      <span>{offer.cta_text || "Apply / Check Rates"}</span>
+                      <ExternalLink className="h-3 w-3 ml-1.5" />
+                    </a>
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -681,16 +961,37 @@ export default function RequirementDetail() {
                   )}
 
                   {isOwner && req.status === "open" && (bid.status === "active" || bid.status === "envelope_a_approved") && (
-                    <Button
-                      size="sm"
-                      className="mt-3 w-full"
-                      onClick={() => handleAcceptBid(bid.id)}
-                      disabled={acceptBidMutation.isPending}
-                      data-testid={`button-accept-bid-${bid.id}`}
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                      Accept this Bid
-                    </Button>
+                    <div className="flex gap-2 mt-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => handleAcceptBid(bid.id)}
+                        disabled={acceptBidMutation.isPending}
+                        data-testid={`button-accept-bid-${bid.id}`}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                        Accept Bid
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                        onClick={() =>
+                          setCheckoutModalConfig({
+                            isOpen: true,
+                            type: "escrow_deposit",
+                            requirementId: id,
+                            bidId: bid.id,
+                            bidAmount: bid.bidAmount,
+                            requirementTitle: req.title,
+                          })
+                        }
+                        data-testid={`button-fund-escrow-${bid.id}`}
+                      >
+                        <Shield className="h-3.5 w-3.5 mr-1.5" />
+                        Fund Escrow
+                      </Button>
+                    </div>
                   )}
 
                   {/* Dispute button — buyer can raise dispute on accepted bid */}
@@ -796,6 +1097,24 @@ export default function RequirementDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <RazorpayCheckoutModal
+        isOpen={checkoutModalConfig.isOpen}
+        onClose={() => setCheckoutModalConfig((prev) => ({ ...prev, isOpen: false }))}
+        type={checkoutModalConfig.type}
+        requirementId={checkoutModalConfig.requirementId}
+        bidId={checkoutModalConfig.bidId}
+        bidAmount={checkoutModalConfig.bidAmount}
+        sellerGstinOrPan={checkoutModalConfig.sellerGstinOrPan}
+        requirementTitle={checkoutModalConfig.requirementTitle}
+        onSuccess={() => {
+          fetchLeadUnlockStatus();
+          if (id) {
+            qc.invalidateQueries({ queryKey: getGetRequirementQueryKey(id) });
+            qc.invalidateQueries({ queryKey: getGetRequirementStatsQueryKey(id) });
+          }
+        }}
+      />
     </Layout>
   );
 }

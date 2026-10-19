@@ -115,6 +115,16 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "User not found" });
     return;
   }
+  let subscriptionTier = "free";
+  try {
+    const { db: schemaDb } = await import("../db/connection.js");
+    const { users: schemaUsers } = await import("../db/schema.js");
+    const [su] = await schemaDb.select().from(schemaUsers).where(eq(schemaUsers.id, user.id));
+    if (su?.subscription_tier === "pro") {
+      subscriptionTier = "pro";
+    }
+  } catch {}
+
   res.json({
     id: user.id,
     name: user.name,
@@ -131,6 +141,8 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
     kycStatus: user.kycStatus,
     kycVerifiedAt: user.kycVerifiedAt?.toISOString() ?? null,
     razorpayLinkedAccountId: user.razorpayLinkedAccountId,
+    subscriptionTier,
+    subscription_tier: subscriptionTier,
     createdAt: user.createdAt.toISOString(),
   });
 });
