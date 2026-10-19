@@ -29,8 +29,8 @@ jobs:
       - name: Install Monorepo Dependencies
         run: pnpm install --dangerously-allow-all-builds
 
-      - name: Build Database Declarations
-        run: npx tsc -b drizzle
+      - name: Build Database and Shared Declarations
+        run: npx tsc -b shared/api-zod shared/api-client-react drizzle
 
       - name: Execute Workspace Typechecks
         run: pnpm run typecheck

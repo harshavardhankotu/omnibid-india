@@ -5,7 +5,7 @@
   "scripts": {
     "build": "npx --yes pnpm --filter @omnibid/client run build && npx --yes pnpm --filter @omnibid/server run build",
     "start": "node server/dist/index.mjs",
-    "typecheck": "tsc -b drizzle && pnpm -r --if-present run typecheck",
+    "typecheck": "tsc -b shared/api-zod shared/api-client-react drizzle && pnpm -r --if-present run typecheck",
     "test": "vitest run",
     "dev:client": "pnpm --filter @omnibid/client run dev",
     "dev:server": "pnpm --filter @omnibid/server run dev",
