@@ -73,6 +73,11 @@ app.use(
 );
 app.use(express.urlencoded({ extended: true }));
 
+// 0. High-availability Health checks for Render, keep-alive crons, and cloud balancers
+app.get(["/healthz", "/health"], (_req, res) => {
+  res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
 // 1. Mount /sitemap.xml and /robots.txt before router or static assets
 app.use(seoRouter);
 
