@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Input } from "@/components/ui/input";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import Layout from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -35,6 +36,9 @@ import {
   Radio,
   Activity,
   Zap,
+  QrCode,
+  Save,
+  Link as LinkIcon,
 } from "lucide-react";
 
 interface RevenueMetrics {
@@ -92,6 +96,107 @@ export default function AdminRevenue() {
   const [isBlasting, setIsBlasting] = useState(false);
   const [blastResult, setBlastResult] = useState<any>(null);
   const [isSimulatingLiquidity, setIsSimulatingLiquidity] = useState(false);
+
+  // Real Monetization & Direct Zero-MDR UPI Configuration
+  const [cuelinksPubId, setCuelinksPubId] = useState("");
+  const [amazonAssociateTag, setAmazonAssociateTag] = useState("omnibid-21");
+  const [merchantUpiId, setMerchantUpiId] = useState("omnibid@okaxis");
+  const [lendingkartUrl, setLendingkartUrl] = useState("");
+  const [moglixUrl, setMoglixUrl] = useState("");
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [isHarvestingReal, setIsHarvestingReal] = useState(false);
+  const [realHarvestStats, setRealHarvestStats] = useState<any>(null);
+
+  useEffect(() => {
+    fetch("/api/affiliate/live-config")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.config) {
+          if (d.config.cuelinksPubId) setCuelinksPubId(d.config.cuelinksPubId);
+          if (d.config.amazonAssociateTag) setAmazonAssociateTag(d.config.amazonAssociateTag);
+          if (d.config.merchantUpiId) setMerchantUpiId(d.config.merchantUpiId);
+          if (d.config.partnerOverrides) {
+            if (d.config.partnerOverrides["00000000-0000-0000-0000-000000000001"]) {
+              setLendingkartUrl(d.config.partnerOverrides["00000000-0000-0000-0000-000000000001"]);
+            }
+            if (d.config.partnerOverrides["00000000-0000-0000-0000-000000000006"]) {
+              setMoglixUrl(d.config.partnerOverrides["00000000-0000-0000-0000-000000000006"]);
+            }
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSaveLiveConfig = async () => {
+    setIsSavingConfig(true);
+    try {
+      const partnerOverrides: Record<string, string> = {};
+      if (lendingkartUrl.trim()) {
+        partnerOverrides["00000000-0000-0000-0000-000000000001"] = lendingkartUrl.trim();
+      }
+      if (moglixUrl.trim()) {
+        partnerOverrides["00000000-0000-0000-0000-000000000006"] = moglixUrl.trim();
+      }
+
+      const res = await fetch("/api/affiliate/configure-live-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cuelinksPubId: cuelinksPubId.trim(),
+          amazonAssociateTag: amazonAssociateTag.trim(),
+          merchantUpiId: merchantUpiId.trim(),
+          partnerOverrides,
+        }),
+      });
+
+      if (res.ok) {
+        toast({
+          title: "💰 Real Payout Links & UPI Keys Saved!",
+          description: `Active UPI VPA: ${merchantUpiId || "Default"} • Cuelinks: ${cuelinksPubId ? "Active" : "Off"} • Amazon Tag: ${amazonAssociateTag || "None"}`,
+        });
+      } else {
+        throw new Error("Failed to save configuration");
+      }
+    } catch (e: any) {
+      toast({
+        title: "Save Failed",
+        description: e.message || "Failed to update live links",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
+
+  const handleHarvestRealTenders = async () => {
+    setIsHarvestingReal(true);
+    try {
+      const res = await fetch("/api/affiliate/autonomous-cycle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (res.ok) {
+        const result = await res.json();
+        setRealHarvestStats(result);
+        toast({
+          title: "🏛️ 100% Real Indian Public Tenders Ingested!",
+          description: `Harvested ${result.realTendersHarvested ?? 0} verified tenders from Central Public Procurement Portal (CPPP) & Indian Procurement RSS. Total Active Tenders: ${result.activeTendersCount}.`,
+        });
+        refetch();
+      } else {
+        throw new Error("Tender scraper failed");
+      }
+    } catch (e: any) {
+      toast({
+        title: "Harvester Error",
+        description: e.message || "Could not harvest live tenders",
+        variant: "destructive",
+      });
+    } finally {
+      setIsHarvestingReal(false);
+    }
+  };
 
   const handleSimulateLiquidity = async () => {
     setIsSimulatingLiquidity(true);
@@ -352,6 +457,158 @@ export default function AdminRevenue() {
             </CardContent>
           </Card>
         </div>
+
+        {/* 💰 Configure Real Payout Links & UPI Keys Panel */}
+        <Card className="border-border/80 bg-card shadow-sm border-l-4 border-l-emerald-500">
+          <CardHeader className="pb-3 border-b border-border/60">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                  <Coins className="h-5 w-5" />
+                </span>
+                <div>
+                  <CardTitle className="text-base font-bold flex items-center gap-2 flex-wrap">
+                    💰 Real Affiliate Monetization &amp; Zero-MDR Direct UPI Keys
+                    <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
+                      LIVE CONFIGURED
+                    </Badge>
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Monetize every contractor click via Cuelinks and Amazon Associates. Collect ₹99 Lead Unlocks directly into your bank account with Zero Gateway Fee via UPI QR.
+                  </CardDescription>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={handleHarvestRealTenders}
+                  disabled={isHarvestingReal}
+                  className="text-xs h-9 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm whitespace-nowrap"
+                  data-testid="button-harvest-real-tenders"
+                >
+                  <Zap className={`h-3.5 w-3.5 mr-1.5 ${isHarvestingReal ? "animate-spin" : ""}`} />
+                  {isHarvestingReal ? "Harvesting CPPP & GeM..." : "🏛️ Ingest Real Public Tenders"}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveLiveConfig}
+                  disabled={isSavingConfig}
+                  className="text-xs h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm whitespace-nowrap"
+                  data-testid="button-save-live-config"
+                >
+                  <Save className={`h-3.5 w-3.5 mr-1.5 ${isSavingConfig ? "animate-spin" : ""}`} />
+                  {isSavingConfig ? "Saving Keys..." : "💾 Save Real Keys"}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-4 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Direct UPI VPA Receiver */}
+              <div className="p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <QrCode className="h-4 w-4 text-emerald-500" />
+                    Direct Merchant UPI ID (0% MDR)
+                  </label>
+                  <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
+                    Instant Bank Deposit
+                  </Badge>
+                </div>
+                <Input
+                  value={merchantUpiId}
+                  onChange={(e) => setMerchantUpiId(e.target.value)}
+                  placeholder="e.g. yourname@okaxis or yourbusiness@icici"
+                  className="text-xs font-mono"
+                  data-testid="input-merchant-upi-id"
+                />
+                <p className="text-[11px] text-muted-foreground leading-tight">
+                  Generates dynamic NPCI QR codes on checkout. ₹99 Lead Unlocks and ₹999 Pro Passes arrive in your bank account immediately with zero gateway deduction.
+                </p>
+              </div>
+
+              {/* Cuelinks Publisher ID */}
+              <div className="p-3.5 rounded-xl border border-blue-500/30 bg-blue-500/5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <LinkIcon className="h-4 w-4 text-blue-500" />
+                    Cuelinks Publisher ID (Pub ID)
+                  </label>
+                  <Badge variant="outline" className="text-[10px] border-blue-500/40 text-blue-600 dark:text-blue-400">
+                    Universal Merchant Wrapper
+                  </Badge>
+                </div>
+                <Input
+                  value={cuelinksPubId}
+                  onChange={(e) => setCuelinksPubId(e.target.value)}
+                  placeholder="e.g. 159821 (from Cuelinks account)"
+                  className="text-xs font-mono"
+                  data-testid="input-cuelinks-pub-id"
+                />
+                <p className="text-[11px] text-muted-foreground leading-tight">
+                  Automatically wraps Moglix, Tata AIG, Flipkart, and JSW Steel outbound links with your Cuelinks publisher tracking URL.
+                </p>
+              </div>
+
+              {/* Amazon Associates Tag */}
+              <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4 text-amber-500" />
+                    Amazon Associate Tag (India)
+                  </label>
+                  <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 dark:text-amber-400">
+                    B2B Equipment
+                  </Badge>
+                </div>
+                <Input
+                  value={amazonAssociateTag}
+                  onChange={(e) => setAmazonAssociateTag(e.target.value)}
+                  placeholder="e.g. omnibid-21 (from Amazon Associates)"
+                  className="text-xs font-mono"
+                  data-testid="input-amazon-associate-tag"
+                />
+                <p className="text-[11px] text-muted-foreground leading-tight">
+                  Injected into industrial safety, testing meters, and tool links so you earn up to 9% affiliate commissions.
+                </p>
+              </div>
+            </div>
+
+            {/* Direct Partner Overrides Grid */}
+            <div className="p-3 rounded-xl border border-border bg-muted/20 space-y-2.5">
+              <span className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <ExternalLink className="h-3.5 w-3.5 text-primary" />
+                Custom Direct Partner Overrides (DSA &amp; Referral URLs)
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="text-[11px] text-muted-foreground font-semibold block mb-1">
+                    Lendingkart MSME DSA Direct Link (Up to ₹2,500 CPA)
+                  </label>
+                  <Input
+                    value={lendingkartUrl}
+                    onChange={(e) => setLendingkartUrl(e.target.value)}
+                    placeholder="https://www.lendingkart.com/apply/?dsa_code=YOUR_CODE"
+                    className="text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground font-semibold block mb-1">
+                    Moglix Industrial Safety Equipment Direct Partner URL
+                  </label>
+                  <Input
+                    value={moglixUrl}
+                    onChange={(e) => setMoglixUrl(e.target.value)}
+                    placeholder="https://www.moglix.com/?aff=YOUR_AFFILIATE_ID"
+                    className="text-xs font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Autonomous Automation Health Panel */}
         <Card className="border-border/80 bg-card shadow-sm">

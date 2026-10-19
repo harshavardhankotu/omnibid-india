@@ -96,6 +96,11 @@ export default function RequirementDetail() {
 
   const [leadUnlockedData, setLeadUnlockedData] = useState<{
     unlocked: boolean;
+    isRealVerifiedTender?: boolean;
+    externalSourceUrl?: string | null;
+    issuingAuthority?: string | null;
+    emdAmountInr?: number | null;
+    boqSummary?: string | null;
     buyerContact?: { phone: string; email: string; name: string };
   } | null>(null);
 
@@ -573,17 +578,45 @@ export default function RequirementDetail() {
             {/* Direct Buyer Contact Unlock Box / Button for Non-Owners */}
             {!isOwner && (
               leadUnlockedData?.unlocked && leadUnlockedData.buyerContact ? (
-                <div className="mt-3 p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 dark:bg-emerald-950/20 text-left">
-                  <div className="flex items-center justify-between mb-1.5">
+                <div className="mt-3 p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 dark:bg-emerald-950/20 text-left space-y-2.5">
+                  <div className="flex items-center justify-between">
                     <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Direct Buyer Contact Unlocked
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      {leadUnlockedData.isRealVerifiedTender ? "Official Public Tender & Contact Unlocked" : "Direct Buyer Contact Unlocked"}
                     </span>
                     <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-medium">
-                      Verified Lead
+                      {leadUnlockedData.isRealVerifiedTender ? "CPPP / GeM Verified" : "Verified Lead"}
                     </Badge>
                   </div>
+                  {leadUnlockedData.isRealVerifiedTender && leadUnlockedData.externalSourceUrl && (
+                    <div className="p-3 rounded-lg border border-blue-500/30 bg-blue-500/10 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-foreground flex items-center gap-1">
+                          🏛️ {leadUnlockedData.issuingAuthority || "Public Procurement Authority"}
+                        </span>
+                        {leadUnlockedData.emdAmountInr ? (
+                          <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                            EMD (2%): ₹{leadUnlockedData.emdAmountInr.toLocaleString("en-IN")}
+                          </span>
+                        ) : null}
+                      </div>
+                      {leadUnlockedData.boqSummary && (
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                          {leadUnlockedData.boqSummary}
+                        </p>
+                      )}
+                      <a
+                        href={leadUnlockedData.externalSourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-1.5 w-full py-1.5 px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-sm transition-colors"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" /> Open Official Verified Government Tender Portal
+                      </a>
+                    </div>
+                  )}
                   <div className="text-sm font-semibold text-foreground">{leadUnlockedData.buyerContact.name}</div>
-                  <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                  <div className="text-xs text-muted-foreground space-y-0.5">
                     <p>📞 Phone: <span className="font-semibold text-foreground">{leadUnlockedData.buyerContact.phone}</span></p>
                     <p>✉️ Email: <span className="font-semibold text-foreground">{leadUnlockedData.buyerContact.email}</span></p>
                   </div>
@@ -593,7 +626,7 @@ export default function RequirementDetail() {
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-2.5 w-full inline-flex items-center justify-center rounded-md text-xs font-semibold py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-colors"
+                    className="w-full inline-flex items-center justify-center rounded-md text-xs font-semibold py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-colors"
                     data-testid="link-whatsapp-direct"
                   >
                     <MessageSquare className="h-3.5 w-3.5 mr-1.5" /> Chat on WhatsApp Directly
@@ -614,7 +647,9 @@ export default function RequirementDetail() {
                   data-testid="button-unlock-buyer-contact"
                 >
                   <Smartphone className="h-4 w-4 text-blue-500" />
-                  Unlock Direct Buyer Contact (₹99 via UPI)
+                  {req.customData?.isRealVerifiedTender || leadUnlockedData?.isRealVerifiedTender
+                    ? "🏛️ Unlock Verified Tender & Contact (₹99 via UPI)"
+                    : "Unlock Direct Buyer Contact (₹99 via UPI)"}
                 </Button>
               )
             )}

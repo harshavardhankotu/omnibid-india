@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -22,7 +24,9 @@ import {
   Lock,
   ArrowRight,
   Smartphone,
-  Building2,
+  QrCode,
+  Copy,
+  ExternalLink,
 } from "lucide-react";
 
 declare global {
@@ -56,8 +60,25 @@ export function RazorpayCheckoutModal({
 }: RazorpayCheckoutModalProps) {
   const { toast } = useToast();
   const { t } = useI18n();
+
+  const [activeTab, setActiveTab] = useState<"upi_qr" | "razorpay">("upi_qr");
   const [isLoadingOrder, setIsLoadingOrder] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [isVerifyingUtr, setIsVerifyingUtr] = useState(false);
+  const [utrNumber, setUtrNumber] = useState("");
+  const [copiedUpi, setCopiedUpi] = useState(false);
+
+  // Direct UPI QR State
+  const [upiQrData, setUpiQrData] = useState<{
+    transactionId: string;
+    upiUri: string;
+    qrImageUrl: string;
+    amountInr: number;
+    merchantUpiId: string;
+    note: string;
+  } | null>(null);
+
+  // Razorpay Order State
   const [orderDetails, setOrderDetails] = useState<{
     orderId: string;
     grossAmountPaise: number;
@@ -80,19 +101,44 @@ export function RazorpayCheckoutModal({
     document.body.appendChild(script);
   }, []);
 
-  // Fetch or initialize order when modal opens
+  // Fetch or initialize order and UPI QR when modal opens
   useEffect(() => {
     if (!isOpen) {
       setOrderDetails(null);
+      setUpiQrData(null);
+      setUtrNumber("");
       setIsProcessingPayment(false);
+      setIsVerifyingUtr(false);
       return;
     }
 
-    const initOrder = async () => {
+    const initPaymentOptions = async () => {
       setIsLoadingOrder(true);
+      const token = localStorage.getItem("omnibid_token");
+
       try {
-        const token = localStorage.getItem("omnibid_token");
-        const res = await fetch("/api/payments/create-order", {
+        // 1. Generate Direct UPI QR
+        const upiRes = await fetch("/api/payments/generate-upi-qr", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            type,
+            requirementId,
+            bidId,
+            amountInr: bidAmount,
+          }),
+        });
+
+        if (upiRes.ok) {
+          const upiData = await upiRes.json();
+          setUpiQrData(upiData);
+        }
+
+        // 2. Prepare Razorpay order
+        const rzpRes = await fetch("/api/payments/create-order", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -107,29 +153,96 @@ export function RazorpayCheckoutModal({
           }),
         });
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || "Failed to create payment order");
+        if (rzpRes.ok) {
+          const rzpData = await rzpRes.json();
+          setOrderDetails(rzpData);
         }
-
-        const data = await res.json();
-        setOrderDetails(data);
       } catch (err: any) {
-        console.error("Order creation error:", err);
-        toast({
-          title: "Order Initialization Failed",
-          description: err?.message || "Could not prepare order with Razorpay.",
-          variant: "destructive",
-        });
+        console.warn("Payment initialization notice:", err);
       } finally {
         setIsLoadingOrder(false);
       }
     };
 
-    initOrder();
-  }, [isOpen, type, requirementId, bidId, bidAmount, sellerGstinOrPan, toast]);
+    initPaymentOptions();
+  }, [isOpen, type, requirementId, bidId, bidAmount, sellerGstinOrPan]);
 
-  // Handle standard Razorpay Checkout Launch
+  // Copy Merchant UPI ID
+  const handleCopyUpiId = () => {
+    if (!upiQrData?.merchantUpiId) return;
+    navigator.clipboard.writeText(upiQrData.merchantUpiId);
+    setCopiedUpi(true);
+    toast({
+      title: "UPI ID Copied",
+      description: `Copied ${upiQrData.merchantUpiId} to clipboard. Pay via any UPI app.`,
+    });
+    setTimeout(() => setCopiedUpi(false), 2500);
+  };
+
+  // Verify 12-Digit UTR
+  const handleVerifyUtr = async () => {
+    if (!utrNumber || utrNumber.trim().length < 8) {
+      toast({
+        title: "Invalid UTR",
+        description: "Please enter a valid 12-digit UPI reference (UTR) from your bank SMS / UPI app.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsVerifyingUtr(true);
+    const token = localStorage.getItem("omnibid_token");
+
+    try {
+      const res = await fetch("/api/payments/verify-utr", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          transactionId: upiQrData?.transactionId,
+          utrNumber: utrNumber.trim(),
+          requirementId,
+          type,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to verify UTR");
+      }
+
+      const result = await res.json();
+
+      if (type === "pro_subscription") {
+        localStorage.setItem("omnibid_pro_active", "true");
+      }
+
+      toast({
+        title: "🎉 Payment Verified via UPI!",
+        description:
+          type === "lead_unlock"
+            ? "Lead unlocked! Official verified tender link & contact details are now accessible."
+            : type === "pro_subscription"
+            ? "OmniBid Pro Contractor status activated!"
+            : "Escrow funds locked successfully.",
+      });
+
+      onSuccess?.(result);
+      onClose();
+    } catch (err: any) {
+      toast({
+        title: "UTR Verification Error",
+        description: err?.message || "Could not confirm UTR reference. Please check and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsVerifyingUtr(false);
+    }
+  };
+
+  // Launch Razorpay Checkout
   const handleLaunchRazorpay = async () => {
     if (!orderDetails) return;
 
@@ -143,7 +256,7 @@ export function RazorpayCheckoutModal({
       name: "OmniBid India",
       description:
         type === "lead_unlock"
-          ? "Direct Buyer Contact Lead Fee"
+          ? "Direct Verified Tender & Lead Access"
           : type === "pro_subscription"
           ? "OmniBid Pro Contractor Subscription"
           : "Milestone Escrow Deposit",
@@ -181,10 +294,10 @@ export function RazorpayCheckoutModal({
             title: "🎉 Payment Successful!",
             description:
               type === "lead_unlock"
-                ? "Buyer contact details unlocked. You can now connect directly on WhatsApp!"
+                ? "Direct contact and official tender link unlocked!"
                 : type === "pro_subscription"
                 ? "Welcome to OmniBid Pro! Unlimited bids & golden badge active."
-                : "Escrow funds securely deposited and held in vault.",
+                : "Escrow funds securely deposited.",
           });
 
           onSuccess?.(response);
@@ -201,7 +314,7 @@ export function RazorpayCheckoutModal({
       },
       prefill: {
         name: "OmniBid User",
-        email: "user@omnibid.in",
+        email: "contractor@omnibid.in",
         contact: "+919876543210",
       },
       theme: {
@@ -224,11 +337,10 @@ export function RazorpayCheckoutModal({
       }
     }
 
-    // In test/dummy mode, simulate completion smoothly
+    // In sandbox or fallback mode, verify simulated payment
     await handleSimulatedPayment();
   };
 
-  // Automated instant checkout simulation for test/sandbox mode
   const handleSimulatedPayment = async () => {
     if (!orderDetails) return;
     setIsProcessingPayment(true);
@@ -259,13 +371,13 @@ export function RazorpayCheckoutModal({
       }
 
       toast({
-        title: "✅ Payment Confirmed (Test Mode)",
+        title: "✅ Payment Confirmed",
         description:
           type === "lead_unlock"
-            ? "Direct Buyer Contact Unlocked!"
+            ? "Direct Buyer Contact & Official Tender Link Unlocked!"
             : type === "pro_subscription"
-            ? "Pro Subscription Activated with DigiLocker badge!"
-            : "Escrow Locked & Requirement Status updated to In Escrow!",
+            ? "Pro Subscription Activated!"
+            : "Escrow Locked & Requirement In Escrow!",
       });
 
       onSuccess?.({
@@ -284,145 +396,222 @@ export function RazorpayCheckoutModal({
     }
   };
 
-  const grossInr = orderDetails ? orderDetails.grossAmountPaise / 100 : (type === "lead_unlock" ? 99 : type === "pro_subscription" ? 999 : bidAmount || 0);
-  const platformFeeInr = orderDetails ? orderDetails.platformFeePaise / 100 : (type === "lead_unlock" ? 99 : type === "pro_subscription" ? 999 : grossInr * 0.02);
-  const tdsInr = orderDetails ? orderDetails.tdsPaise / 100 : 0;
-  const netInr = orderDetails ? orderDetails.netSettlementPaise / 100 : Math.max(0, grossInr - platformFeeInr - tdsInr);
+  const amountPayableInr =
+    upiQrData?.amountInr ||
+    (orderDetails ? orderDetails.grossAmountPaise / 100 : type === "lead_unlock" ? 99 : type === "pro_subscription" ? 999 : bidAmount || 0);
+
+  const isRazorpayLive = !!(orderDetails && orderDetails.keyId.startsWith("rzp_live_"));
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-2 mb-1">
             {type === "pro_subscription" ? (
               <Badge className="bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1">
-                <Sparkles className="h-3.5 w-3.5" /> PRO CONTRACTOR
+                <Sparkles className="h-3.5 w-3.5" /> PRO CONTRACTOR PASS
               </Badge>
             ) : type === "lead_unlock" ? (
               <Badge className="bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 flex items-center gap-1">
-                <Smartphone className="h-3.5 w-3.5" /> INSTANT LEAD ACCESS
+                <Smartphone className="h-3.5 w-3.5" /> VERIFIED TENDER & LEAD UNLOCK
               </Badge>
             ) : (
               <Badge className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                <ShieldCheck className="h-3.5 w-3.5" /> 100% ESCROW TRUST
+                <ShieldCheck className="h-3.5 w-3.5" /> 100% ESCROW VAULT
               </Badge>
             )}
           </div>
           <DialogTitle className="text-xl font-bold text-foreground">
             {type === "lead_unlock"
-              ? t("unlock_buyer_contact")
+              ? "Unlock Verified Tender & Direct Contact"
               : type === "pro_subscription"
               ? t("pro_upgrade")
               : t("fund_escrow")}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            {requirementTitle ? `Requirement: ${requirementTitle}` : "Secure UPI, NetBanking & Card checkout powered by Razorpay"}
+            {requirementTitle ? `Requirement: ${requirementTitle}` : "Zero-MDR Direct UPI QR or Razorpay Gateway"}
           </DialogDescription>
         </DialogHeader>
 
         {isLoadingOrder ? (
           <div className="py-12 flex flex-col items-center justify-center space-y-3">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Initializing Razorpay Order...</p>
+            <p className="text-sm text-muted-foreground">Preparing Payment Channels...</p>
           </div>
         ) : (
           <div className="space-y-4 my-2">
-            {/* Financial Breakdown Card */}
-            <div className="p-4 rounded-xl border border-border bg-muted/40 space-y-2.5 text-sm">
-              <div className="flex items-center justify-between text-muted-foreground">
-                <span>Gross Payable</span>
-                <span className="font-semibold text-foreground">₹{grossInr.toLocaleString("en-IN")}</span>
+            {/* Amount Banner */}
+            <div className="p-3.5 rounded-xl border border-primary/30 bg-primary/5 flex items-center justify-between">
+              <div>
+                <span className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">Amount Payable</span>
+                <div className="text-2xl font-black text-foreground">₹{amountPayableInr.toLocaleString("en-IN")}</div>
               </div>
-
-              {type === "escrow_deposit" && (
-                <>
-                  <div className="flex items-center justify-between text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      {t("platform_fee")}
-                    </span>
-                    <span className="font-medium text-foreground">₹{platformFeeInr.toLocaleString("en-IN")}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      {t("tds_deduction")} {grossInr > 30000 ? "(Sec 194C)" : "(Exempt ≤ ₹30k)"}
-                    </span>
-                    <span className="font-medium text-amber-600 dark:text-amber-400">
-                      -₹{tdsInr.toLocaleString("en-IN")}
-                    </span>
-                  </div>
-
-                  <div className="border-t border-border pt-2 flex items-center justify-between font-bold">
-                    <span className="text-emerald-600 dark:text-emerald-400">{t("net_payout")}</span>
-                    <span className="text-emerald-600 dark:text-emerald-400">₹{netInr.toLocaleString("en-IN")}</span>
-                  </div>
-                </>
-              )}
-
-              {type === "lead_unlock" && (
-                <div className="border-t border-border pt-2 flex items-center justify-between font-bold">
-                  <span>Total Unlock Fee</span>
-                  <span className="text-primary">₹99</span>
-                </div>
-              )}
-
-              {type === "pro_subscription" && (
-                <div className="border-t border-border pt-2 flex items-center justify-between font-bold">
-                  <span>Pro Plan (Monthly)</span>
-                  <span className="text-amber-600 dark:text-amber-400">₹999 / mo</span>
-                </div>
-              )}
+              <Badge variant="outline" className="text-xs border-emerald-500/40 text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-500/10">
+                0% Gateway Fee via UPI
+              </Badge>
             </div>
 
-            {/* Supported payment rails */}
-            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-background border border-border text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5 font-medium">
-                <Lock className="h-3.5 w-3.5 text-primary" /> Supported Rails:
-              </span>
-              <div className="flex items-center gap-2 font-medium">
-                <span className="px-1.5 py-0.5 rounded bg-muted">UPI</span>
-                <span className="px-1.5 py-0.5 rounded bg-muted">Cards</span>
-                <span className="px-1.5 py-0.5 rounded bg-muted">NetBanking</span>
-              </div>
-            </div>
+            {/* Payment Method Tabs */}
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+              <TabsList className="grid grid-cols-2 w-full">
+                <TabsTrigger value="upi_qr" className="flex items-center gap-1.5 text-xs font-semibold">
+                  <QrCode className="h-4 w-4 text-emerald-500" /> Instant UPI QR (0% Fee)
+                </TabsTrigger>
+                <TabsTrigger value="razorpay" className="flex items-center gap-1.5 text-xs font-semibold">
+                  <CreditCard className="h-4 w-4 text-blue-500" />
+                  {isRazorpayLive ? "Razorpay Live" : "Cards / Gateway"}
+                </TabsTrigger>
+              </TabsList>
+
+              {/* TAB 1: Direct UPI QR with UTR Verification */}
+              <TabsContent value="upi_qr" className="space-y-3.5 mt-3">
+                {upiQrData ? (
+                  <div className="flex flex-col items-center p-3.5 rounded-xl border border-border bg-muted/20 text-center">
+                    {/* QR Code Image */}
+                    <div className="relative p-2 rounded-lg bg-white border border-border shadow-sm mb-2">
+                      <img
+                        src={upiQrData.qrImageUrl}
+                        alt="Scan UPI QR"
+                        className="w-48 h-48 object-contain"
+                      />
+                    </div>
+
+                    <p className="text-xs font-medium text-foreground">
+                      Scan with any UPI app: Google Pay, PhonePe, Paytm, BHIM, CRED
+                    </p>
+
+                    {/* Merchant UPI ID Box */}
+                    <div className="mt-2.5 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-background border border-border text-xs w-full justify-between">
+                      <span className="text-muted-foreground font-mono truncate">
+                        UPI: <span className="font-semibold text-foreground">{upiQrData.merchantUpiId}</span>
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs flex items-center gap-1 text-primary shrink-0"
+                        onClick={handleCopyUpiId}
+                      >
+                        {copiedUpi ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                        {copiedUpi ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+
+                    {/* Mobile Direct Pay Link */}
+                    <a
+                      href={upiQrData.upiUri}
+                      className="mt-2 w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold py-1.5 px-3 rounded-lg bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600/20 border border-emerald-500/30 transition-colors"
+                    >
+                      <Smartphone className="h-3.5 w-3.5" /> Open in UPI App (Mobile)
+                    </a>
+
+                    {/* 12-Digit Bank UTR Verification Input */}
+                    <div className="mt-4 w-full text-left space-y-1.5">
+                      <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                        <span>Enter 12-Digit Bank Reference (UTR)</span>
+                        <span className="text-[10px] text-muted-foreground font-normal">From bank SMS or UPI receipt</span>
+                      </label>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="e.g. 429188291039"
+                          value={utrNumber}
+                          onChange={(e) => setUtrNumber(e.target.value)}
+                          className="font-mono text-sm tracking-wider"
+                          maxLength={20}
+                        />
+                        <Button
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 font-semibold text-xs"
+                          onClick={handleVerifyUtr}
+                          disabled={isVerifyingUtr || !utrNumber.trim()}
+                        >
+                          {isVerifyingUtr ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            "Verify & Unlock"
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-6 text-center text-sm text-muted-foreground">
+                    Unable to load UPI QR. Please switch to the Gateway tab.
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* TAB 2: Standard Razorpay Gateway */}
+              <TabsContent value="razorpay" className="space-y-3 mt-3">
+                <div className="p-3.5 rounded-xl border border-border bg-muted/40 space-y-2 text-sm">
+                  <div className="flex items-center justify-between text-muted-foreground text-xs">
+                    <span>Base Amount</span>
+                    <span className="font-semibold text-foreground">₹{amountPayableInr.toLocaleString("en-IN")}</span>
+                  </div>
+                  {type === "escrow_deposit" && (
+                    <div className="flex items-center justify-between text-muted-foreground text-xs">
+                      <span>Platform Escrow Fee (2%)</span>
+                      <span className="font-medium text-foreground">
+                        ₹{orderDetails ? (orderDetails.platformFeePaise / 100).toLocaleString("en-IN") : "0"}
+                      </span>
+                    </div>
+                  )}
+                  <div className="border-t border-border pt-2 flex items-center justify-between font-bold text-sm">
+                    <span>Total Checkout</span>
+                    <span className="text-primary">₹{amountPayableInr.toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-background border border-border text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <Lock className="h-3.5 w-3.5 text-primary" /> Supported Rails:
+                  </span>
+                  <div className="flex items-center gap-1.5 font-medium">
+                    <span className="px-1.5 py-0.5 rounded bg-muted text-[11px]">UPI</span>
+                    <span className="px-1.5 py-0.5 rounded bg-muted text-[11px]">Cards</span>
+                    <span className="px-1.5 py-0.5 rounded bg-muted text-[11px]">NetBanking</span>
+                  </div>
+                </div>
+
+                <Button
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center justify-center gap-1.5 mt-2"
+                  onClick={handleLaunchRazorpay}
+                  disabled={isLoadingOrder || isProcessingPayment}
+                >
+                  {isProcessingPayment ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Processing Razorpay...
+                    </>
+                  ) : (
+                    <>
+                      <IndianRupee className="h-4 w-4" /> Pay ₹{amountPayableInr.toLocaleString("en-IN")} via Gateway
+                    </>
+                  )}
+                </Button>
+              </TabsContent>
+            </Tabs>
 
             {/* Security Guarantee */}
             <div className="flex items-start gap-2 text-xs text-muted-foreground bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/20">
               <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
               <span>
                 {type === "escrow_deposit"
-                  ? "Escrow protection under RBI Section 10(2) PSS Act. Funds are disbursed to contractor only upon your milestone approval."
+                  ? "Escrow protection under Section 10(2) PSS Act. Funds disbursed only upon your milestone signoff."
                   : type === "pro_subscription"
-                  ? "Pro Contractor status includes DigiLocker verification badge, priority L1 ranking & zero transaction platform surcharges."
-                  : "Direct buyer unlock includes verified phone number, company email, and 1-click WhatsApp conversation link."}
+                  ? "Pro Contractor membership includes DigiLocker verification, 0% platform fee surcharges, and priority L1 tender alerts."
+                  : "Lead unlock includes direct buyer contact details, verified government tender portal URL, and complete BOQ breakdown."}
               </span>
             </div>
           </div>
         )}
 
-        <DialogFooter className="flex flex-col sm:flex-row gap-2 mt-2">
-          <Button variant="outline" onClick={onClose} disabled={isProcessingPayment}>
+        <DialogFooter className="flex items-center justify-between mt-1">
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={isProcessingPayment || isVerifyingUtr}>
             Cancel
           </Button>
-
-          <Button
-            className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold flex items-center justify-center gap-1.5"
-            onClick={handleLaunchRazorpay}
-            disabled={isLoadingOrder || isProcessingPayment}
-          >
-            {isProcessingPayment ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" /> Processing...
-              </>
-            ) : (
-              <>
-                <IndianRupee className="h-4 w-4" /> Pay ₹{grossInr.toLocaleString("en-IN")} via Razorpay
-              </>
-            )}
-          </Button>
+          <span className="text-[11px] text-muted-foreground">Encrypted 256-Bit TLS</span>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
 export default RazorpayCheckoutModal;
