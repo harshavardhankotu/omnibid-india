@@ -421,6 +421,27 @@ export default function AdvancedAuction() {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const simulateLiveWarMutation = useMutation({
+    mutationFn: async () => {
+      const res = await authFetch(`/api/auctions/${requirementId}/simulate-activity`, {
+        method: "POST",
+        body: JSON.stringify({ forceAntiSniping: true }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Failed to simulate bidding war");
+      return d;
+    },
+    onSuccess: () => {
+      toast({
+        title: "⚡ Live Bidding War Simulated",
+        description: "⚡ Live Bidding War Simulated: 3 competitive bids placed! Watch L1 flip and Anti-Sniping timer trigger.",
+      });
+      qc.invalidateQueries({ queryKey: ["/api/requirements", requirementId] });
+      qc.invalidateQueries({ queryKey: ["auction-leaderboard", requirementId] });
+    },
+    onError: (e: Error) => toast({ title: "Simulation Error", description: e.message, variant: "destructive" }),
+  });
+
   // Bid placement handler with offline queue support
   const handlePlaceBid = async (amount: number, messageText?: string) => {
     if (!amount || amount <= 0) {
@@ -546,7 +567,17 @@ export default function AdvancedAuction() {
               {reqDetail?.title || "Real-time competitive pricing platform"}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              onClick={() => simulateLiveWarMutation.mutate()}
+              disabled={simulateLiveWarMutation.isPending}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-8 shadow-sm flex items-center gap-1.5"
+              data-testid="simulate-live-bidding-war-button"
+            >
+              <Zap className={`h-3.5 w-3.5 ${simulateLiveWarMutation.isPending ? "animate-spin" : ""}`} />
+              ⚡ Simulate Live Bidding War
+            </Button>
             {config && !loadConfig && (
               <Badge variant="outline" className="text-xs capitalize">{config.auctionType || "reverse"}</Badge>
             )}
@@ -737,7 +768,18 @@ export default function AdvancedAuction() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => simulateLiveWarMutation.mutate()}
+                    disabled={simulateLiveWarMutation.isPending}
+                    className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40 font-bold text-xs h-7 flex items-center gap-1 shadow-xs"
+                    data-testid="simulate-live-bidding-war-status-button"
+                  >
+                    <Zap className={`h-3 w-3 ${simulateLiveWarMutation.isPending ? "animate-spin" : ""}`} />
+                    ⚡ Simulate Live Bidding War
+                  </Button>
                   {remainingSeconds !== null && (
                     <Badge variant="outline" className="text-xs font-mono font-bold px-2.5 py-1 border-primary/40 bg-background flex items-center gap-1">
                       <Clock className="h-3.5 w-3.5 text-primary" />

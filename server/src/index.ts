@@ -1,7 +1,8 @@
-import app from "./app";
-import { logger } from "./lib/logger";
+import app from "./app.js";
+import { logger } from "./lib/logger.js";
+import { autoBootstrap } from "./services/auto-bootstrap.js";
 
-const rawPort = process.env["PORT"];
+const rawPort = process.env["PORT"] || (process.env.NODE_ENV !== "production" ? "5000" : "");
 
 if (!rawPort) {
   throw new Error(
@@ -15,11 +16,21 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
+async function startServer(): Promise<void> {
+  try {
+    await autoBootstrap();
+  } catch (err: any) {
+    logger.error({ err }, "Auto-bootstrap initialization warning");
   }
 
-  logger.info({ port }, "Server listening");
-});
+  app.listen(port, (err) => {
+    if (err) {
+      logger.error({ err }, "Error listening on port");
+      process.exit(1);
+    }
+
+    logger.info({ port }, "Server listening");
+  });
+}
+
+startServer();

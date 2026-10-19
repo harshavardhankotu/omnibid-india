@@ -51,6 +51,7 @@ interface RevenueMetrics {
 interface RevenueStatsResponse {
   totalOffers: number;
   activeOffers: number;
+  activeTendersCount?: number;
   totalClicks: number;
   clicksByChannel: {
     web_auction: number;
@@ -90,6 +91,41 @@ export default function AdminRevenue() {
   const { toast } = useToast();
   const [isBlasting, setIsBlasting] = useState(false);
   const [blastResult, setBlastResult] = useState<any>(null);
+  const [isSimulatingLiquidity, setIsSimulatingLiquidity] = useState(false);
+
+  const handleSimulateLiquidity = async () => {
+    setIsSimulatingLiquidity(true);
+    try {
+      const res = await fetch("/api/auctions/00000000-0000-0000-0000-000000000001/simulate-activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ forceAntiSniping: true }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        toast({
+          title: "⚡ War Room Liquidity Simulated!",
+          description: `3 competitive contractor bids placed! L1 dropped to ₹${result.newL1Amount?.toLocaleString("en-IN") || "N/A"}. Outbid: ${result.outbidContractor}. Anti-Sniping triggered: ${result.extended ? "YES (+120s)" : "NO"}.`,
+        });
+        refetch();
+        refetchBroadcasts();
+      } else {
+        toast({
+          title: "Simulation Failed",
+          description: "Could not trigger War Room liquidity simulation.",
+          variant: "destructive",
+        });
+      }
+    } catch (e: any) {
+      toast({
+        title: "Simulation Error",
+        description: e.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSimulatingLiquidity(false);
+    }
+  };
 
   const { data, isLoading, refetch, isRefetching } = useQuery<RevenueStatsResponse>({
     queryKey: ["admin-revenue-stats"],
@@ -326,8 +362,11 @@ export default function AdminRevenue() {
                   <Activity className="h-5 w-5" />
                 </span>
                 <div>
-                  <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <CardTitle className="text-base font-bold flex items-center gap-2 flex-wrap">
                     Autonomous Automation Health Panel
+                    <Badge variant="outline" className="text-[10px] font-mono border-amber-500/40 text-amber-600 dark:text-amber-400">
+                      {blastResult?.activeTendersCount ?? data?.activeTendersCount ?? 8} ACTIVE TENDERS
+                    </Badge>
                     <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
                       LIVE DAEMON
                     </Badge>
@@ -338,22 +377,34 @@ export default function AdminRevenue() {
                 </div>
               </div>
 
-              <Button
-                size="sm"
-                onClick={handleRunAutonomousCycle}
-                disabled={isBlasting}
-                className="text-xs h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm whitespace-nowrap"
-                data-testid="button-run-autonomous-cycle-panel"
-              >
-                <Zap className={`h-3.5 w-3.5 mr-1.5 ${isBlasting ? "animate-spin" : ""}`} />
-                {isBlasting ? "Broadcasting Cycle..." : "⚡ Run Autonomous Affiliate Cycle Now"}
-              </Button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  onClick={handleSimulateLiquidity}
+                  disabled={isSimulatingLiquidity}
+                  className="text-xs h-9 bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-sm whitespace-nowrap"
+                  data-testid="button-simulate-liquidity-panel"
+                >
+                  <Zap className={`h-3.5 w-3.5 mr-1.5 ${isSimulatingLiquidity ? "animate-spin" : ""}`} />
+                  {isSimulatingLiquidity ? "Simulating Liquidity..." : "⚡ Simulate War Room Liquidity"}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleRunAutonomousCycle}
+                  disabled={isBlasting}
+                  className="text-xs h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm whitespace-nowrap"
+                  data-testid="button-run-autonomous-cycle-panel"
+                >
+                  <Zap className={`h-3.5 w-3.5 mr-1.5 ${isBlasting ? "animate-spin" : ""}`} />
+                  {isBlasting ? "Broadcasting Cycle..." : "⚡ Run Autonomous Affiliate Cycle Now"}
+                </Button>
+              </div>
             </div>
           </CardHeader>
 
           <CardContent className="p-4 space-y-4">
             {/* Automation Health Indicators Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* SSE Live Stream Status */}
               <div className="p-3 rounded-xl border border-border/70 bg-muted/30 space-y-1">
                 <div className="flex items-center justify-between">
@@ -389,6 +440,28 @@ export default function AdminRevenue() {
                 </div>
                 <p className="text-[10px] text-muted-foreground">
                   Bids placed offline are safely preserved in browser and auto-submitted on reconnection.
+                </p>
+              </div>
+
+              {/* Active Self-Driving Tenders Indicator */}
+              <div className="p-3 rounded-xl border border-border/70 bg-muted/30 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <Zap className="h-3.5 w-3.5 text-amber-500" />
+                    Self-Driving Tenders
+                  </span>
+                  <Badge variant="secondary" className="text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                    Rolling Replenisher
+                  </Badge>
+                </div>
+                <div className="text-sm font-bold text-foreground flex items-baseline gap-1.5">
+                  <span className="text-lg font-black text-amber-600 dark:text-amber-400">
+                    {blastResult?.activeTendersCount ?? data?.activeTendersCount ?? 8}
+                  </span>
+                  <span className="text-xs text-muted-foreground">Active Tenders</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Rotating commercial tenders: Ultratech, JSW, Polycab, Infra.Market, Astral, Porter.
                 </p>
               </div>
 

@@ -8,6 +8,7 @@ import {
   revenue_transactions,
   type AffiliateOffer,
 } from "../db/schema.js";
+import { replenishTendersIfNeeded, getActiveTendersCount } from "../services/autonomous-engine.js";
 
 const router: IRouter = Router();
 
@@ -717,9 +718,12 @@ export async function handleGetAffiliateStats(req: Request, res: Response): Prom
 
     const epc = totalClicks > 0 ? affiliateRevenueInr / totalClicks : 0;
 
+    const activeTendersCount = await getActiveTendersCount();
+
     res.status(200).json({
       totalOffers: allOffers.length,
       activeOffers: allOffers.filter((o) => o.active).length,
+      activeTendersCount,
       totalClicks,
       clicksByChannel,
       estimatedRevenueInr: Math.round(totalEstimatedRevenueInr),
@@ -762,6 +766,7 @@ export async function handleGetAffiliateStats(req: Request, res: Response): Prom
  */
 export async function handleAutonomousCycle(req: Request, res: Response): Promise<void> {
   try {
+    const replenishTelemetry = await replenishTendersIfNeeded();
     const allOffers = await getActiveOffers();
     const cycleTimestamp = new Date().toISOString();
     const cycleId = `cycle_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -807,9 +812,12 @@ export async function handleAutonomousCycle(req: Request, res: Response): Promis
       success: true,
       cycleId,
       timestamp: cycleTimestamp,
+      replenishedCount: replenishTelemetry.replenishedCount,
+      activeTendersCount: replenishTelemetry.activeTendersCount,
       trendingOffersCount: allOffers.length,
       broadcastsCount: broadcasts.length,
       broadcasts,
+      newTenders: replenishTelemetry.newTenders,
       message: "Autonomous deal distribution cycle executed successfully. Broadcast assets generated with tamper-proof tracking links.",
     });
   } catch (error: any) {

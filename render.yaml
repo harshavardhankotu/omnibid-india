@@ -1,11 +1,11 @@
-# Render Blueprint configuration for zero-cost deployment of OmniBid India & Affiliate Marketing Suite
+# Render Blueprint configuration for single-origin zero-cost deployment of OmniBid India
 services:
   - type: web
-    name: omnibid-server
+    name: omnibid-india
     runtime: node
     plan: free
-    buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @omnibid/server build
-    startCommand: pnpm --filter @omnibid/server start
+    buildCommand: pnpm install --no-frozen-lockfile && npm run build
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
@@ -29,23 +29,15 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
-
-  - type: web
-    name: omnibid-affiliate-suite
-    runtime: docker
-    dockerfilePath: ./affiliate-suite/Dockerfile
-    dockerContext: ./affiliate-suite
-    plan: free
-    envVars:
-      - key: FLASK_ENV
-        value: production
-      - key: PORT
-        value: 5000
-      - key: SQLITE_DB_PATH
-        value: /tmp/affiliate.db
-      - key: FLASK_SECRET_KEY
-        generateValue: true
-      - key: POSTBACK_SECRET
-        generateValue: true
-      - key: OMNIBID_API_URL
-        value: https://prompt-understander-1.onrender.com
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHANNEL_ID
+        sync: false
+      - key: WHATSAPP_API_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false

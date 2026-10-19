@@ -5,8 +5,20 @@ import {
   sendWebPush,
   type PushSubscriptionData,
 } from "../services/push-notification.service.js";
+import { getVapidPublicKey } from "../services/auto-bootstrap.js";
 
 const router: IRouter = Router();
+
+/**
+ * GET /api/push/vapid-public-key
+ * Returns active VAPID public key for Web Push client subscription.
+ */
+router.get("/push/vapid-public-key", async (_req: Request, res: Response): Promise<void> => {
+  res.json({
+    success: true,
+    publicKey: getVapidPublicKey(),
+  });
+});
 
 /**
  * POST /api/push/subscribe

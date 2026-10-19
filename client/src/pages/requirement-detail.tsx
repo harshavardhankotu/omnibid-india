@@ -442,8 +442,31 @@ export default function RequirementDetail() {
     );
   }
 
+  const schemaJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Tender",
+    name: req.title,
+    description: req.description,
+    price: req.maxBudget,
+    priceCurrency: "INR",
+    validThrough: req.auctionEndsAt,
+    areaServed: {
+      "@type": "AdministrativeArea",
+      name: req.city,
+      postalCode: req.pincode || undefined,
+    },
+    seller: {
+      "@type": "Organization",
+      name: "OmniBid India",
+    },
+  };
+
   return (
     <Layout>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaJsonLd) }}
+      />
       <div className="max-w-3xl mx-auto space-y-4">
         {/* Header Card */}
         <Card>

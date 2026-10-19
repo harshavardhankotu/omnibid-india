@@ -7,6 +7,7 @@ import {
 import { requireAuth } from "../middlewares/auth";
 import { z } from "zod";
 import { calculateEscrowBreakdown, validateGSTIN } from "../lib/gstin-tds.js";
+import { simulateLiveBidding } from "../services/autonomous-engine.js";
 
 // Active SSE client registry for real-time auction broadcasts
 type SseClient = {
@@ -875,6 +876,34 @@ router.get("/auctions/:requirementId/purchase-order", async (req, res): Promise<
   } catch (error: any) {
     console.error("Error generating purchase order:", error);
     res.status(500).json({ error: error.message || "Failed to generate purchase order" });
+  }
+});
+
+/**
+ * POST /auctions/:requirementId/simulate-activity
+ * Triggers realistic live bidding war simulation in the War Room with 3 regional contractors,
+ * anti-sniping extension, VAPID outbid notifications, and real-time SSE broadcasts.
+ */
+router.post("/auctions/:requirementId/simulate-activity", async (req, res): Promise<void> => {
+  try {
+    const requirementId = String(req.params.requirementId);
+    const result = await simulateLiveBidding(requirementId, req.body);
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    console.error("Error simulating live auction bidding war:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to simulate bidding activity" });
+  }
+});
+
+// Also bind /auction/:requirementId/simulate-activity for singular route compatibility
+router.post("/auction/:requirementId/simulate-activity", async (req, res): Promise<void> => {
+  try {
+    const requirementId = String(req.params.requirementId);
+    const result = await simulateLiveBidding(requirementId, req.body);
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    console.error("Error simulating live auction bidding war:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to simulate bidding activity" });
   }
 });
 

@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "build": "npx --yes pnpm --filter @omnibid/client run build && npx --yes pnpm --filter @omnibid/server run build",
+    "start": "node server/dist/index.mjs",
     "typecheck": "pnpm -r --if-present run typecheck",
     "test": "vitest run",
     "dev:client": "pnpm --filter @omnibid/client run dev",
