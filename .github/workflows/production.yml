@@ -35,6 +35,9 @@ jobs:
       - name: Execute Workspace Typechecks
         run: pnpm run typecheck
 
+      - name: Build Client and Server Production Bundles
+        run: pnpm run build
+
       - name: Run Global Vitest Suite
         run: npx vitest run
 
