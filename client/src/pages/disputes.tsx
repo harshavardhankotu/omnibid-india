@@ -44,9 +44,9 @@ import {
 
 function statusBadge(status: Dispute["status"]) {
   const map: Record<string, { label: string; cls: string }> = {
-    open: { label: "Open", cls: "bg-orange-100 text-orange-700 border-orange-200" },
-    provider_responded: { label: "Response received", cls: "bg-blue-100 text-blue-700 border-blue-200" },
-    resolved: { label: "Resolved", cls: "bg-green-100 text-green-700 border-green-200" },
+    open: { label: "Open", cls: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800" },
+    provider_responded: { label: "Response received", cls: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800" },
+    resolved: { label: "Resolved", cls: "bg-green-100 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-300 dark:border-green-800" },
     cancelled: { label: "Cancelled", cls: "bg-muted text-muted-foreground" },
   };
   const s = map[status] ?? { label: status, cls: "bg-muted text-muted-foreground" };

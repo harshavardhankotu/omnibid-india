@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RequirementsListSkeleton } from "@/components/loading-skeletons";
 import { Search, Filter, ShieldCheck, Clock, ArrowRight, Briefcase } from "lucide-react";
 
 interface RequirementItem {
@@ -108,11 +109,7 @@ export default function MarketplacePage() {
 
         {/* Requirements Grid */}
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="h-64 rounded-xl bg-muted animate-pulse border" />
-            ))}
-          </div>
+          <RequirementsListSkeleton count={6} columns={3} variant="detailed" className="gap-6" />
         ) : filteredRequirements.length === 0 ? (
           <div className="text-center py-16 border rounded-xl bg-card">
             <Briefcase className="mx-auto h-12 w-12 text-muted-foreground opacity-50 mb-3" />

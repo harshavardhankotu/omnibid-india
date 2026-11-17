@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Offline — OmniBid India</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        background: #f8fafc;
+        color: #0f172a;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+      }
+      .card {
+        max-width: 420px;
+        width: 100%;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 2rem;
+        text-align: center;
+        box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: #fef3c7;
+        color: #92400e;
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.35rem 0.75rem;
+        border-radius: 9999px;
+        margin-bottom: 1rem;
+      }
+      h1 { font-size: 1.35rem; font-weight: 700; margin-bottom: 0.5rem; }
+      p { font-size: 0.9rem; color: #475569; line-height: 1.5; margin-bottom: 1.5rem; }
+      .actions { display: flex; gap: 0.75rem; justify-content: center; }
+      button, a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.65rem 1.1rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        border: none;
+      }
+      .primary { background: #2a439c; color: #ffffff; }
+      .secondary { background: #f1f5f9; color: #0f172a; }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="badge">Offline Mode</div>
+      <h1>You are currently offline</h1>
+      <p>
+        OmniBid India cannot reach the network right now. Previously cached pages and saved tenders remain available when you return online.
+      </p>
+      <div class="actions">
+        <button class="primary" onclick="window.location.reload()">Retry Connection</button>
+        <a class="secondary" href="/">Cached Home</a>
+      </div>
+    </main>
+  </body>
+</html>

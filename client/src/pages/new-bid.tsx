@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   AlertTriangle, ExternalLink, FileText, IndianRupee, Loader2, Shield, Star, Truck, UserCheck, Users, Zap,
 } from "lucide-react";
+import { BidProfitCalculator } from "@/components/bid-profit-calculator";
 
 const schema = z.object({
   bidAmount: z.number().min(1, "Enter a bid amount"),
@@ -300,6 +301,13 @@ export default function NewBid() {
                 )}
               </CardContent>
             </Card>
+
+            <BidProfitCalculator
+              bidAmount={Number(bidAmount) || 0}
+              maxBudget={req?.maxBudget ?? null}
+              isHighlighted={isHighlighted}
+              defaultEntityKind={isAgencyProvider ? "company" : "individual"}
+            />
 
             {/* Executor Declaration — Anti-Ghost Contractor */}
             <Card className="border-blue-200 dark:border-blue-800">

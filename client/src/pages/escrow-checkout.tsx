@@ -138,7 +138,7 @@ export default function EscrowCheckoutPage() {
         <Card className="border-2 shadow-lg">
           <CardHeader className="bg-muted/30 border-b pb-6">
             <div className="flex items-center justify-between gap-2 mb-2">
-              <Badge variant="outline" className="gap-1 bg-emerald-50 text-emerald-700 border-emerald-300">
+              <Badge variant="outline" className="gap-1 bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800">
                 <ShieldCheck className="h-3.5 w-3.5" /> RBI Compliant Escrow Vault
               </Badge>
               <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -154,7 +154,7 @@ export default function EscrowCheckoutPage() {
           <CardContent className="space-y-6 pt-6">
             {paymentSuccess ? (
               <div className="text-center py-8 space-y-4">
-                <div className="inline-flex p-3 rounded-full bg-emerald-100 text-emerald-600 mb-2">
+                <div className="inline-flex p-3 rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 mb-2">
                   <CheckCircle2 className="h-10 w-10" />
                 </div>
                 <h2 className="text-2xl font-bold text-foreground">Escrow Successfully Funded!</h2>
@@ -192,7 +192,7 @@ export default function EscrowCheckoutPage() {
                   </div>
 
                   {tdsDeduction > 0 && (
-                    <div className="flex justify-between text-sm text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
+                    <div className="flex justify-between text-sm text-amber-700 bg-amber-50 p-2 rounded border border-amber-200 dark:text-amber-300 dark:bg-amber-950/30 dark:border-amber-800">
                       <span>TDS Withheld at Source (Sec 194C/J 2%):</span>
                       <span className="font-semibold">- ₹{tdsDeduction.toLocaleString("en-IN")}</span>
                     </div>

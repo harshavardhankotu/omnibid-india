@@ -23,8 +23,10 @@ import { useAuth } from "@/lib/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { uploadFile } from "@/lib/storage";
+import { ContractFeedback } from "@/components/contract-feedback";
+import { QrScannerModal } from "@/components/qr-scanner-modal";
 import {
-  ArrowLeft, CheckCircle2, Clock, IndianRupee, Lock, Receipt, Shield, Upload, XCircle, Loader2
+  ArrowLeft, CheckCircle2, Clock, IndianRupee, Lock, QrCode, Receipt, Shield, Upload, XCircle, Loader2
 } from "lucide-react";
 
 function loadScript(src: string): Promise<boolean> {
@@ -61,6 +63,7 @@ export default function PaymentDetail() {
   const [milestoneNum, setMilestoneNum] = useState(1);
   const [proofUrl, setProofUrl] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [showQrScanner, setShowQrScanner] = useState(false);
 
   const handleProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -295,16 +298,34 @@ export default function PaymentDetail() {
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setLocation(`/requirements/${requirementId}`)}>
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back
-          </Button>
-          <div>
-            <h1 className="text-lg font-bold">UPI Escrow Payment</h1>
-            {req && <p className="text-xs text-muted-foreground">{req.title}</p>}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => setLocation(`/requirements/${requirementId}`)}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Back
+            </Button>
+            <div>
+              <h1 className="text-lg font-bold">UPI Escrow Payment</h1>
+              {req && <p className="text-xs text-muted-foreground">{req.title}</p>}
+            </div>
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowQrScanner(true)}
+            data-testid="button-verify-receipt-qr"
+          >
+            <QrCode className="h-4 w-4 mr-1.5" />
+            Verify Receipt QR
+          </Button>
         </div>
+
+        <QrScannerModal
+          open={showQrScanner}
+          onOpenChange={setShowQrScanner}
+          defaultFocus="receipt"
+        />
 
         {isLoading ? (
           <div className="space-y-3">
@@ -546,6 +567,17 @@ export default function PaymentDetail() {
                 ))}
               </CardContent>
             </Card>
+
+            {winningBid && (req?.status === "completed" || payment.escrowStatus === "released") && (
+              <ContractFeedback
+                requirementId={requirementId}
+                requirementTitle={req?.title}
+                providerId={winningBid.providerId}
+                providerName={winningBid.providerName}
+                contractStatus={req?.status ?? "completed"}
+                isBuyer={isBuyer}
+              />
+            )}
           </>
         )}
       </div>

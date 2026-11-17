@@ -31,9 +31,9 @@ const CATEGORIES = [
 ];
 
 const saturationColors: Record<string, string> = {
-  high: "bg-red-100 text-red-700",
-  medium: "bg-yellow-100 text-yellow-700",
-  low: "bg-green-100 text-green-700",
+  high: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300",
+  medium: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-300",
+  low: "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300",
 };
 
 export default function MarketIntelligence() {
@@ -91,9 +91,9 @@ export default function MarketIntelligence() {
             {isProvider && data?.providerView && (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <Card className="border-blue-200 bg-blue-50/40">
+                  <Card className="border-blue-200 bg-blue-50/40 dark:border-blue-900 dark:bg-blue-950/20">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm text-blue-700 flex items-center gap-1">
+                      <CardTitle className="text-sm text-blue-700 dark:text-blue-400 flex items-center gap-1">
                         <Clock className="h-4 w-4" />
                         Best Bid Window
                       </CardTitle>
@@ -104,9 +104,9 @@ export default function MarketIntelligence() {
                     </CardContent>
                   </Card>
 
-                  <Card className="border-green-200 bg-green-50/40">
+                  <Card className="border-green-200 bg-green-50/40 dark:border-green-900 dark:bg-green-950/20">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm text-green-700 flex items-center gap-1">
+                      <CardTitle className="text-sm text-green-700 dark:text-green-400 flex items-center gap-1">
                         <Target className="h-4 w-4" />
                         Winning Bid Range
                       </CardTitle>
@@ -117,9 +117,9 @@ export default function MarketIntelligence() {
                     </CardContent>
                   </Card>
 
-                  <Card className="border-purple-200 bg-purple-50/40">
+                  <Card className="border-purple-200 bg-purple-50/40 dark:border-purple-900 dark:bg-purple-950/20">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm text-purple-700 flex items-center gap-1">
+                      <CardTitle className="text-sm text-purple-700 dark:text-purple-400 flex items-center gap-1">
                         <TrendingUp className="h-4 w-4" />
                         Competitiveness Index
                       </CardTitle>
@@ -132,9 +132,9 @@ export default function MarketIntelligence() {
                 </div>
 
                 {/* Tip banner */}
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-                  <Lightbulb className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-                  <p className="text-sm text-amber-800">{data.providerView.tip}</p>
+                <div className="bg-amber-50 dark:bg-amber-950/25 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex items-start gap-3">
+                  <Lightbulb className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <p className="text-sm text-amber-800 dark:text-amber-200">{data.providerView.tip}</p>
                 </div>
 
                 {/* Market saturation by sector */}

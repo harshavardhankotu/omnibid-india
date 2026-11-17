@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, avg, count } from "drizzle-orm";
+import { and, eq, avg, count } from "drizzle-orm";
 import { db, usersTable, reviewsTable, bidsTable, providerSubscriptionsTable } from "@omnibid/db";
 import { UpdateUserBody } from "@omnibid/api-zod";
 import { requireAuth } from "../middlewares/auth";
@@ -23,7 +23,7 @@ router.get("/users/:id", async (req, res): Promise<void> => {
   const [wonBids] = await db
     .select({ count: count() })
     .from(bidsTable)
-    .where(eq(bidsTable.status, "accepted"));
+    .where(and(eq(bidsTable.providerId, id), eq(bidsTable.status, "accepted")));
 
   const [sub] = await db
     .select()

@@ -53,8 +53,9 @@ app.use(
       const cleanOrigin = origin.replace(/\/$/, "");
       const cleanAllowed = allowedOrigins.map((o) => o.trim().replace(/\/$/, ""));
       const isVercel = /\.vercel\.app$/.test(cleanOrigin);
+      const isCloudRun = /\.run\.app$/.test(cleanOrigin);
 
-      if (cleanAllowed.includes(cleanOrigin) || cleanAllowed.includes("*") || isVercel) {
+      if (cleanAllowed.includes(cleanOrigin) || cleanAllowed.includes("*") || isVercel || isCloudRun) {
         callback(null, true);
       } else {
         callback(new Error(`Not allowed by CORS: ${origin}`));
@@ -145,5 +146,18 @@ if (clientDistPath) {
     next();
   });
 }
+
+// 4. Resilient API error handler
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error({ err, path: req.path }, "Unhandled request error");
+  if (req.path.startsWith("/api")) {
+    const msg = String(err?.message || "");
+    if (msg.includes("ECONNREFUSED") || msg.includes("connect") || msg.includes("timeout")) {
+      return res.status(503).json({ error: "Service temporarily unavailable (database offline)" });
+    }
+    return res.status(err?.status || 500).json({ error: err?.message || "Internal server error" });
+  }
+  res.status(500).send("Internal Server Error");
+});
 
 export default app;

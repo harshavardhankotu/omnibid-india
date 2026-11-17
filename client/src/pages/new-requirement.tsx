@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -19,6 +20,8 @@ import { getCategoryIcon } from "@/lib/category-icons";
 import { IndianRupee, Loader2, PlusCircle, Clock, RefreshCw, Users, MessageSquare, Zap } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import type { Category } from "@omnibid/api-client-react";
+import { RequirementQuickTips, type RequirementFormSection } from "@/components/requirement-quick-tips";
+import { MarketPricePredictor } from "@/components/market-price-predictor";
 
 const RECURRING_INTERVALS = [
   { value: "weekly", label: "Every week" },
@@ -82,9 +85,18 @@ export default function NewRequirement() {
     },
   });
 
+  const [activeSection, setActiveSection] = useState<RequirementFormSection>("overview");
+
   const selectedCategoryId = form.watch("categoryId");
+  const title = form.watch("title");
+  const description = form.watch("description");
+  const city = form.watch("city");
+  const state = form.watch("state");
   const maxBudget = form.watch("maxBudget");
+  const deadlineHours = form.watch("deadlineHours");
+  const customData = form.watch("customData");
   const isRecurring = form.watch("isRecurring");
+  const recurringInterval = form.watch("recurringInterval");
   const isMegaProject = form.watch("isMegaProject");
   const isSyndicate = form.watch("isSyndicate");
   const jugaadMode = form.watch("jugaadMode");
@@ -124,7 +136,7 @@ export default function NewRequirement() {
 
   return (
     <Layout>
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold">Post a Problem</h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -132,14 +144,16 @@ export default function NewRequirement() {
           </p>
         </div>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-            {/* Category */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold">Category</CardTitle>
-              </CardHeader>
-              <CardContent>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="lg:col-span-7">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                {/* Category */}
+                <Card onMouseDown={() => setActiveSection("category")} onFocusCapture={() => setActiveSection("category")}>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-semibold">Category</CardTitle>
+                  </CardHeader>
+                  <CardContent>
                 <FormField
                   control={form.control}
                   name="categoryId"
@@ -176,7 +190,7 @@ export default function NewRequirement() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <FormField control={form.control} name="title" render={({ field }) => (
-                  <FormItem>
+                  <FormItem onFocusCapture={() => setActiveSection("title")}>
                     <FormLabel>Title</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. Need ACL surgery package in Hyderabad" data-testid="input-title" {...field} />
@@ -186,7 +200,7 @@ export default function NewRequirement() {
                 )} />
 
                 <FormField control={form.control} name="description" render={({ field }) => (
-                  <FormItem>
+                  <FormItem onFocusCapture={() => setActiveSection("description")}>
                     <FormLabel>Description</FormLabel>
                     <FormControl>
                       <Textarea
@@ -207,7 +221,7 @@ export default function NewRequirement() {
                     control={form.control}
                     name={`customData.${cf.key}` as "customData"}
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem onFocusCapture={() => setActiveSection("custom")}>
                         <FormLabel>{cf.label}{cf.required && <span className="text-destructive ml-1">*</span>}</FormLabel>
                         <FormControl>
                           {cf.type === "select" && cf.options ? (
@@ -238,7 +252,7 @@ export default function NewRequirement() {
                 <CardTitle className="text-sm font-semibold">Location & Budget</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3" onFocusCapture={() => setActiveSection("location")}>
                   <FormField control={form.control} name="city" render={({ field }) => (
                     <FormItem>
                       <FormLabel>City</FormLabel>
@@ -255,36 +269,58 @@ export default function NewRequirement() {
                   )} />
                 </div>
 
-                <FormField control={form.control} name="maxBudget" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center justify-between">
-                      <span>Maximum Budget</span>
-                      <span className="flex items-center gap-0.5 font-bold text-primary">
-                        <IndianRupee className="h-4 w-4" />
-                        {field.value.toLocaleString("en-IN")}
-                        {field.value > 10000 && <Badge className="ml-1 text-[10px] bg-amber-500 text-white">High Value</Badge>}
-                      </span>
-                    </FormLabel>
-                    <FormControl>
-                      <Slider
-                        min={500}
-                        max={500000}
-                        step={500}
-                        value={[field.value]}
-                        onValueChange={(v) => field.onChange(v[0])}
-                        className="mt-2"
-                        data-testid="slider-budget"
-                      />
-                    </FormControl>
-                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                      <span>₹500</span>
-                      <span>₹5,00,000</span>
-                    </div>
-                  </FormItem>
-                )} />
+                <FormField control={form.control} name="maxBudget" render={({ field }) => {
+                  const sliderMax = Math.max(500000, Math.ceil((field.value || 500) / 100000) * 100000);
+                  return (
+                    <FormItem onMouseDown={() => setActiveSection("budget")} onFocusCapture={() => setActiveSection("budget")}>
+                      <FormLabel className="flex flex-wrap items-center justify-between gap-2">
+                        <span>Maximum Budget</span>
+                        <div className="flex items-center gap-2">
+                          <div className="relative flex items-center">
+                            <IndianRupee className="h-3.5 w-3.5 text-primary absolute left-2 pointer-events-none" />
+                            <Input
+                              type="number"
+                              min={100}
+                              step={500}
+                              value={field.value}
+                              onChange={(e) => {
+                                setActiveSection("budget");
+                                const nextVal = Number(e.target.value);
+                                field.onChange(Number.isFinite(nextVal) ? Math.max(0, nextVal) : 0);
+                              }}
+                              className="h-8 w-32 pl-6 pr-2 text-right font-bold text-primary tabular-nums"
+                              aria-label="Maximum Budget in INR"
+                              data-testid="input-max-budget"
+                            />
+                          </div>
+                          {field.value > 10000 && <Badge className="text-[10px] bg-amber-500 text-white">High Value</Badge>}
+                        </div>
+                      </FormLabel>
+                      <FormControl>
+                        <Slider
+                          min={500}
+                          max={sliderMax}
+                          step={500}
+                          value={[Math.min(sliderMax, Math.max(500, field.value || 500))]}
+                          onValueChange={(v) => {
+                            setActiveSection("budget");
+                            field.onChange(v[0]);
+                          }}
+                          className="mt-2"
+                          data-testid="slider-budget"
+                        />
+                      </FormControl>
+                      <div className="flex justify-between text-xs text-muted-foreground mt-1 tabular-nums">
+                        <span>₹500</span>
+                        <span>₹{sliderMax.toLocaleString("en-IN")}</span>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }} />
 
                 <FormField control={form.control} name="deadlineHours" render={({ field }) => (
-                  <FormItem>
+                  <FormItem onMouseDown={() => setActiveSection("deadline")} onFocusCapture={() => setActiveSection("deadline")}>
                     <FormLabel className="flex items-center gap-1.5">
                       <Clock className="h-3.5 w-3.5" />
                       Auction Duration
@@ -294,7 +330,10 @@ export default function NewRequirement() {
                         <button
                           key={opt.value}
                           type="button"
-                          onClick={() => field.onChange(opt.value)}
+                          onClick={() => {
+                            setActiveSection("deadline");
+                            field.onChange(opt.value);
+                          }}
                           className={`py-2 px-3 rounded-lg border text-xs font-medium transition-all ${field.value === opt.value ? "border-primary bg-primary/5 text-primary" : "border-border hover:border-primary/40"}`}
                           data-testid={`button-deadline-${opt.value}`}
                         >
@@ -308,8 +347,24 @@ export default function NewRequirement() {
               </CardContent>
             </Card>
 
+            {/* Market Price Predictor */}
+            <MarketPricePredictor
+              categoryId={selectedCategoryId}
+              city={city}
+              state={state}
+              deadlineHours={deadlineHours}
+              maxBudget={maxBudget}
+              isSyndicate={isSyndicate}
+              isMegaProject={isMegaProject}
+              onApplyBudget={(amount) => {
+                setActiveSection("budget");
+                form.setValue("maxBudget", amount, { shouldValidate: true, shouldDirty: true });
+              }}
+              onInteract={() => setActiveSection("budget")}
+            />
+
             {/* Recurring */}
-            <Card>
+            <Card onMouseDown={() => setActiveSection("recurring")} onFocusCapture={() => setActiveSection("recurring")}>
               <CardContent className="p-4 space-y-3">
                 <FormField control={form.control} name="isRecurring" render={({ field }) => (
                   <FormItem className="flex items-center justify-between">
@@ -338,7 +393,7 @@ export default function NewRequirement() {
                             key={opt.value}
                             type="button"
                             onClick={() => field.onChange(opt.value)}
-                            className={`py-2 px-3 rounded-lg border text-xs font-medium transition-all ${field.value === opt.value ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20 text-blue-700" : "border-border hover:border-blue-300"}`}
+                            className={`py-2 px-3 rounded-lg border text-xs font-medium transition-all ${field.value === opt.value ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300" : "border-border hover:border-blue-300"}`}
                             data-testid={`button-interval-${opt.value}`}
                           >
                             {opt.label}
@@ -352,7 +407,7 @@ export default function NewRequirement() {
             </Card>
 
             {/* Advanced Toggles — Mega Project, Syndicate, Jugaad */}
-            <Card>
+            <Card onMouseDown={() => setActiveSection("modes")} onFocusCapture={() => setActiveSection("modes")}>
               <CardContent className="p-4 space-y-4">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Special Modes</p>
 
@@ -424,16 +479,37 @@ export default function NewRequirement() {
               </CardContent>
             </Card>
 
-            <Button type="submit" size="lg" className="w-full font-semibold" disabled={createMutation.isPending} data-testid="button-submit">
-              {createMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <PlusCircle className="h-4 w-4 mr-2" />
-              )}
-              Post Requirement
-            </Button>
-          </form>
-        </Form>
+                <Button type="submit" size="lg" className="w-full font-semibold" disabled={createMutation.isPending} data-testid="button-submit">
+                  {createMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <PlusCircle className="h-4 w-4 mr-2" />
+                  )}
+                  Post Requirement
+                </Button>
+              </form>
+            </Form>
+          </div>
+
+          <div className="lg:col-span-5">
+            <RequirementQuickTips
+              activeSection={activeSection}
+              selectedCategory={selectedCategory}
+              title={title}
+              description={description}
+              city={city}
+              state={state}
+              maxBudget={maxBudget}
+              deadlineHours={deadlineHours}
+              isRecurring={isRecurring}
+              recurringInterval={recurringInterval}
+              isMegaProject={isMegaProject}
+              isSyndicate={isSyndicate}
+              jugaadMode={jugaadMode}
+              customData={customData}
+            />
+          </div>
+        </div>
       </div>
     </Layout>
   );

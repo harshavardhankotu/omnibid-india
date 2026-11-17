@@ -1,7 +1,23 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL || "https://mock.supabase.co";
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "mock-key";
+function resolveSafeSupabaseUrl(raw: string | undefined): string {
+  const trimmed = (raw || "").trim();
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+      return trimmed;
+    }
+  } catch {
+    // Fallback to mock URL when env var is missing or malformed
+  }
+  return "https://mock.supabase.co";
+}
+
+const supabaseUrl = resolveSafeSupabaseUrl(process.env.SUPABASE_URL);
+const supabaseKey =
+  (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim() ||
+  (process.env.SUPABASE_ANON_KEY || "").trim() ||
+  "mock-key";
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 

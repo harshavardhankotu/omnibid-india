@@ -1,31 +1,64 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface CountdownProps {
   endsAt: string;
   className?: string;
   large?: boolean;
+  expiredText?: string;
+  onExpire?: () => void;
 }
 
-export function Countdown({ endsAt, className, large }: CountdownProps) {
+export function Countdown({
+  endsAt,
+  className,
+  large,
+  expiredText = "Expired",
+  onExpire,
+}: CountdownProps) {
   const [timeLeft, setTimeLeft] = useState(() => getTimeLeft(endsAt));
+  const onExpireRef = useRef(onExpire);
+  const hasFiredExpireRef = useRef(false);
+
+  onExpireRef.current = onExpire;
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setTimeLeft(getTimeLeft(endsAt));
+    hasFiredExpireRef.current = false;
+    const sync = () => {
+      const next = getTimeLeft(endsAt);
+      setTimeLeft(next);
+      if (next.expired && !hasFiredExpireRef.current) {
+        hasFiredExpireRef.current = true;
+        onExpireRef.current?.();
+      }
+      return next.expired;
+    };
+
+    if (sync()) return;
+
+    const interval = window.setInterval(() => {
+      if (sync()) {
+        window.clearInterval(interval);
+      }
     }, 1000);
-    return () => clearInterval(interval);
+
+    return () => window.clearInterval(interval);
   }, [endsAt]);
 
   if (timeLeft.expired) {
     return (
-      <span className={cn("text-muted-foreground font-mono", large ? "text-lg" : "text-xs", className)}>
-        Expired
+      <span
+        className={cn("text-muted-foreground font-mono font-semibold", large ? "text-lg" : "text-xs", className)}
+        data-testid="countdown-expired"
+      >
+        {expiredText}
       </span>
     );
   }
 
   const isUrgent = timeLeft.totalSeconds < 3600;
+  const days = Math.floor(timeLeft.hours / 24);
+  const remHours = timeLeft.hours % 24;
 
   return (
     <span
@@ -37,7 +70,7 @@ export function Countdown({ endsAt, className, large }: CountdownProps) {
       )}
       data-testid="countdown-timer"
     >
-      {timeLeft.hours > 0 && `${pad(timeLeft.hours)}:`}
+      {days > 0 ? `${days}d ${pad(remHours)}:` : timeLeft.hours > 0 ? `${pad(timeLeft.hours)}:` : ""}
       {pad(timeLeft.minutes)}:{pad(timeLeft.seconds)}
       {timeLeft.hours === 0 && timeLeft.minutes === 0 && (
         <span className="ml-1 text-destructive animate-pulse">!</span>
@@ -51,7 +84,8 @@ function pad(n: number) {
 }
 
 function getTimeLeft(endsAt: string) {
-  const diff = new Date(endsAt).getTime() - Date.now();
+  const endMs = new Date(endsAt).getTime();
+  const diff = Number.isNaN(endMs) ? 0 : endMs - Date.now();
   if (diff <= 0) return { expired: true, hours: 0, minutes: 0, seconds: 0, totalSeconds: 0 };
   const totalSeconds = Math.floor(diff / 1000);
   const hours = Math.floor(totalSeconds / 3600);

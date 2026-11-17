@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, negotiationsTable, requirementsTable, usersTable } from "@omnibid/db";
 import { requireAuth } from "../middlewares/auth";
+import { recordRequirementActivity } from "../services/activity-log.service.js";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -119,6 +120,24 @@ router.post("/requirements/:requirementId/negotiations/message", requireAuth, as
     .where(eq(negotiationsTable.id, neg.id))
     .returning();
 
+  const [senderUser] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId));
+  recordRequirementActivity({
+    id: `neg-msg-${newMessage.id}`,
+    requirementId,
+    category: "negotiations",
+    type: newMessage.isCounterOffer ? "negotiation_counter_offer" : "negotiation_message",
+    title: newMessage.isCounterOffer && newMessage.counterAmount
+      ? `Counter-Offer Proposed: ₹${Number(newMessage.counterAmount).toLocaleString("en-IN")}`
+      : "Negotiation Message",
+    description: newMessage.text,
+    actorName: senderUser?.name ?? (isBuyer ? "Buyer" : "Contractor"),
+    actorRole: isBuyer ? "Buyer" : "Contractor",
+    amountInr: newMessage.counterAmount ?? null,
+    statusFrom: newMessage.isCounterOffer ? "open" : null,
+    statusTo: newMessage.isCounterOffer ? "pending" : null,
+    timestamp: newMessage.sentAt,
+  });
+
   res.json({
     ...updated,
     messages: updatedMessages,
@@ -178,6 +197,22 @@ router.post("/requirements/:requirementId/negotiations/respond", requireAuth, as
     })
     .where(eq(negotiationsTable.id, neg.id))
     .returning();
+
+  const [responderUser] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, userId));
+  recordRequirementActivity({
+    id: `neg-msg-${systemMessage.id}`,
+    requirementId,
+    category: "negotiations",
+    type: parsed.data.action === "accept" ? "counter_offer_accepted" : "counter_offer_declined",
+    title: parsed.data.action === "accept" ? "Counter-Offer Accepted" : "Counter-Offer Declined",
+    description: systemMessage.text,
+    actorName: responderUser?.name ?? "Contractor",
+    actorRole: "Contractor",
+    amountInr: neg.counterOfferAmount ? Number(neg.counterOfferAmount) : null,
+    statusFrom: "pending",
+    statusTo: newStatus,
+    timestamp: systemMessage.sentAt,
+  });
 
   res.json({
     ...updated,

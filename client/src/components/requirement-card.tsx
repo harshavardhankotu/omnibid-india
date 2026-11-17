@@ -2,8 +2,9 @@ import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Countdown } from "@/components/countdown";
-import { Flame, IndianRupee, MapPin, Users, Zap } from "lucide-react";
+import { Bookmark, BookmarkCheck, Flame, IndianRupee, MapPin, Users, Zap } from "lucide-react";
 import { getCategoryIcon } from "@/lib/category-icons";
+import { useSavedRequirements } from "@/hooks/use-saved-requirements";
 import type { Requirement } from "@omnibid/api-client-react";
 
 interface RequirementCardProps {
@@ -13,6 +14,8 @@ interface RequirementCardProps {
 export function RequirementCard({ requirement: r }: RequirementCardProps) {
   const Icon = getCategoryIcon(r.categoryIconName);
   const isBidWar = r.bidCount >= 5;
+  const { isSaved, toggleBookmark } = useSavedRequirements();
+  const bookmarked = isSaved(r.id);
 
   return (
     <Link href={`/requirements/${r.id}`}>
@@ -48,12 +51,37 @@ export function RequirementCard({ requirement: r }: RequirementCardProps) {
                 </p>
               </div>
             </div>
-            <div className="text-right flex-shrink-0">
-              <div className="flex items-center justify-end gap-0.5 text-primary font-bold">
-                <IndianRupee className="h-3.5 w-3.5" />
-                <span className="text-base">{r.maxBudget.toLocaleString("en-IN")}</span>
+            <div className="flex items-start gap-2 flex-shrink-0">
+              <div className="text-right">
+                <div className="flex items-center justify-end gap-0.5 text-primary font-bold">
+                  <IndianRupee className="h-3.5 w-3.5" />
+                  <span className="text-base tabular-nums">{r.maxBudget.toLocaleString("en-IN")}</span>
+                </div>
+                <div className="text-[10px] text-muted-foreground">max budget</div>
               </div>
-              <div className="text-[10px] text-muted-foreground">max budget</div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toggleBookmark(r.id, r.title);
+                }}
+                aria-label={bookmarked ? `Remove ${r.title} from saved requirements` : `Save ${r.title} for later`}
+                aria-pressed={bookmarked}
+                title={bookmarked ? "Saved for later (click to remove)" : "Save requirement for later"}
+                data-testid={`button-bookmark-${r.id}`}
+                className={`p-1.5 rounded-md border transition-colors ${
+                  bookmarked
+                    ? "bg-primary/10 border-primary/30 text-primary"
+                    : "border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
+              >
+                {bookmarked ? (
+                  <BookmarkCheck className="h-4 w-4" />
+                ) : (
+                  <Bookmark className="h-4 w-4" />
+                )}
+              </button>
             </div>
           </div>
 

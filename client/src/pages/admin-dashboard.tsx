@@ -2,8 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import Layout from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
+import { DashboardSkeleton } from "@/components/loading-skeletons";
+import { CachedModeBanner } from "@/components/cached-mode-banner";
+import { useDashboardCache } from "@/hooks/use-dashboard-cache";
 import { useAuth } from "@/lib/auth";
 import { Link } from "wouter";
 import {
@@ -112,7 +113,7 @@ export default function AdminDashboard() {
 
   const isAdmin = (user?.trustScore ?? 0) >= 100 || user?.email?.endsWith?.("@omnibid.admin");
 
-  const { data, isLoading, error } = useQuery<AdminDashboardData>({
+  const { data, isLoading, isError, error, isFetching, refetch } = useQuery<AdminDashboardData>({
     queryKey: ["/analytics/admin-dashboard"],
     queryFn: async () => {
       const res = await authFetch("/analytics/admin-dashboard");
@@ -120,6 +121,25 @@ export default function AdminDashboard() {
       return res.json();
     },
     enabled: !!user && isAdmin,
+  });
+
+  const {
+    effectiveData,
+    isCachedMode,
+    isOffline,
+    lastSyncedAt,
+    hasSnapshot,
+    isLoadingEffective,
+    retrySync,
+  } = useDashboardCache({
+    cacheKey: "admin-analytics",
+    apiPath: "/api/analytics/admin-dashboard",
+    userId: user?.id,
+    data,
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
   });
 
   if (!user) {
@@ -148,17 +168,17 @@ export default function AdminDashboard() {
   }
 
   // Pre-calculate aggregates
-  const totalGtv = data?.financials.reduce((acc, f) => acc + Number(f.gross_transaction_volume_gtv), 0) ?? 0;
-  const totalRevenue = data?.financials.reduce((acc, f) => acc + Number(f.total_platform_fees_collected), 0) ?? 0;
+  const totalGtv = effectiveData?.financials.reduce((acc, f) => acc + Number(f.gross_transaction_volume_gtv), 0) ?? 0;
+  const totalRevenue = effectiveData?.financials.reduce((acc, f) => acc + Number(f.total_platform_fees_collected), 0) ?? 0;
   
-  const totalFrozen = data?.trustDisputes.reduce((acc, t) => acc + Number(t.total_frozen_capital), 0) ?? 0;
+  const totalFrozen = effectiveData?.trustDisputes.reduce((acc, t) => acc + Number(t.total_frozen_capital), 0) ?? 0;
   
-  const totalPayments = data?.trustDisputes.reduce((acc, t) => acc + Number(t.total_payments), 0) ?? 0;
-  const totalDisputes = data?.trustDisputes.reduce((acc, t) => acc + Number(t.total_disputes), 0) ?? 0;
+  const totalPayments = effectiveData?.trustDisputes.reduce((acc, t) => acc + Number(t.total_payments), 0) ?? 0;
+  const totalDisputes = effectiveData?.trustDisputes.reduce((acc, t) => acc + Number(t.total_disputes), 0) ?? 0;
   const overallDisputeRate = totalPayments > 0 ? (totalDisputes / totalPayments) * 100 : 0;
 
   // Format chart data
-  const gtvChartData = [...(data?.financials ?? [])]
+  const gtvChartData = [...(effectiveData?.financials ?? [])]
     .reverse()
     .map(f => ({
       month: new Date(f.reporting_month).toLocaleDateString("en-IN", { month: "short", year: "2-digit" }),
@@ -166,7 +186,7 @@ export default function AdminDashboard() {
       Revenue: Math.round(Number(f.total_platform_fees_collected) / 100000) // convert to Lakhs
     }));
 
-  const sectorChartData = (data?.sectorAnalytics ?? [])
+  const sectorChartData = (effectiveData?.sectorAnalytics ?? [])
     .map(s => ({
       sector: s.sector_name.split(" & ")[0],
       "Bid Density": parseFloat(s.bid_density)
@@ -195,23 +215,24 @@ export default function AdminDashboard() {
                 <ArrowRight className="h-3 w-3" />
               </a>
             </Link>
-            <Badge className="bg-violet-600 hover:bg-violet-700 text-white font-medium px-2.5 py-0.5 shadow-sm shadow-violet-500/15">✨ SQL Live</Badge>
+            <Badge className={`${isCachedMode ? "bg-amber-600 hover:bg-amber-700" : "bg-violet-600 hover:bg-violet-700"} text-white font-medium px-2.5 py-0.5 shadow-sm shadow-violet-500/15`}>
+              {isCachedMode ? "Cached Snapshot" : "✨ SQL Live"}
+            </Badge>
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {[0, 1, 2, 3].map(i => (
-                <Skeleton key={i} className="h-28 rounded-xl bg-muted/65" />
-              ))}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Skeleton className="h-80 rounded-xl bg-muted/65" />
-              <Skeleton className="h-80 rounded-xl bg-muted/65" />
-            </div>
-          </div>
-        ) : error || !data ? (
+        <CachedModeBanner
+          isCachedMode={isCachedMode}
+          isOffline={isOffline}
+          hasSnapshot={hasSnapshot}
+          lastSyncedAt={lastSyncedAt}
+          isFetching={isFetching}
+          onRetrySync={retrySync}
+        />
+
+        {isLoadingEffective ? (
+          <DashboardSkeleton variant="admin" />
+        ) : (error && !effectiveData) || !effectiveData ? (
           <Card className="border-red-200 bg-red-50/20 dark:bg-red-950/10">
             <CardContent className="p-6 text-center text-red-600 dark:text-red-400">
               <AlertTriangle className="h-10 w-10 mx-auto mb-2" />
@@ -331,7 +352,7 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {data.sectorAnalytics.map((s, idx) => (
+                      {effectiveData.sectorAnalytics.map((s, idx) => (
                         <tr key={s.sector_slug ?? idx} className="hover:bg-muted/10 transition-colors">
                           <td className="p-3.5 pl-6 font-semibold">{s.sector_name}</td>
                           <td className="p-3.5 font-medium">{s.total_requirements} projects</td>
@@ -365,7 +386,7 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {data.trustDisputes.map((t, idx) => (
+                      {effectiveData.trustDisputes.map((t, idx) => (
                         <tr key={t.sector_slug ?? idx} className="hover:bg-muted/10 transition-colors">
                           <td className="p-3.5 pl-6 font-semibold">{t.sector_name}</td>
                           <td className="p-3.5 font-medium">{t.total_payments} payments</td>

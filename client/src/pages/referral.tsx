@@ -33,10 +33,10 @@ type ReferralStats = { referralCode: string; referralLink: string; totalReferral
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   pending: { label: "Invited", cls: "bg-muted text-muted-foreground" },
-  clicked: { label: "Link Clicked", cls: "bg-blue-100 text-blue-700" },
-  signed_up: { label: "Signed Up", cls: "bg-yellow-100 text-yellow-700" },
-  converted: { label: "First Bid!", cls: "bg-green-100 text-green-700" },
-  rewarded: { label: "Reward Paid", cls: "bg-emerald-100 text-emerald-700" },
+  clicked: { label: "Link Clicked", cls: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300" },
+  signed_up: { label: "Signed Up", cls: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-300" },
+  converted: { label: "First Bid!", cls: "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300" },
+  rewarded: { label: "Reward Paid", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" },
 };
 
 export default function Referral() {

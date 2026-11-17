@@ -1,6 +1,6 @@
 // @refresh reset
 import { useState, useEffect } from "react";
-import { useParams, useLocation } from "wouter";
+import { Link, useParams, useLocation } from "wouter";
 import Layout from "@/components/layout";
 import { Countdown } from "@/components/countdown";
 import { Badge } from "@/components/ui/badge";
@@ -41,8 +41,16 @@ import { getCategoryIcon } from "@/lib/category-icons";
 import { useI18n } from "@/lib/i18n";
 import { calculateEscrowBreakdown, validateGSTIN } from "@/lib/gstin-tds";
 import { RazorpayCheckoutModal } from "@/components/razorpay-checkout-modal";
+import { ContractFeedback } from "@/components/contract-feedback";
+import { BidHistorySparkline } from "@/components/bid-history-sparkline";
+import { RequirementSubscribeButton } from "@/components/requirement-subscribe-button";
+import { RequirementActivityLog } from "@/components/requirement-activity-log";
+import { useSavedRequirements } from "@/hooks/use-saved-requirements";
 import {
   AlertCircle,
+  Bookmark,
+  BookmarkCheck,
+  Check,
   CheckCircle2,
   Clock,
   ExternalLink,
@@ -55,6 +63,7 @@ import {
   MessageSquare,
   RefreshCw,
   Scale,
+  Share2,
   Shield,
   Smartphone,
   Sparkles,
@@ -93,6 +102,8 @@ export default function RequirementDetail() {
   const [disputeDesc, setDisputeDesc] = useState("");
   const [smartMatchData, setSmartMatchData] = useState<{ recommendedBidId: string | null; justification: string | null } | null>(null);
   const [isSmartMatching, setIsSmartMatching] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const { isSaved, isPending: isBookmarkPending, toggleBookmark } = useSavedRequirements();
 
   const [leadUnlockedData, setLeadUnlockedData] = useState<{
     unlocked: boolean;
@@ -143,8 +154,9 @@ export default function RequirementDetail() {
     query: {
       queryKey: getGetRequirementQueryKey(id),
       refetchInterval: (query: { state: { data: unknown } }): number | false => {
-        const d = query.state.data as { status?: string } | undefined;
-        return d?.status === "open" ? 20000 : false;
+        const d = query.state.data as { status?: string; auctionEndsAt?: string } | undefined;
+        const notExpired = !d?.auctionEndsAt || new Date(d.auctionEndsAt).getTime() > Date.now();
+        return d?.status === "open" && notExpired ? 20000 : false;
       },
     },
   });
@@ -217,6 +229,9 @@ export default function RequirementDetail() {
           // Instantly trigger React Query refetch to sync UI with database changes
           qc.invalidateQueries({ queryKey: getGetRequirementQueryKey(id) });
           qc.invalidateQueries({ queryKey: getGetRequirementStatsQueryKey(id) });
+          qc.invalidateQueries({ queryKey: ["requirement-subscription", id] });
+          qc.invalidateQueries({ queryKey: ["requirement-activity", id] });
+          qc.invalidateQueries({ queryKey: ["notifications"] });
           
           toast({
             title: "New Live Bid!",
@@ -236,6 +251,48 @@ export default function RequirementDetail() {
   const repostMutation = useRepostRequirement();
   const approveEnvelopeAMutation = useApproveEnvelopeA();
 
+  const [isDeadlinePassed, setIsDeadlinePassed] = useState(false);
+
+  useEffect(() => {
+    if (!req) {
+      setIsDeadlinePassed(false);
+      return;
+    }
+    if (req.status === "expired") {
+      setIsDeadlinePassed(true);
+      return;
+    }
+    if (req.status !== "open" || !req.auctionEndsAt) {
+      setIsDeadlinePassed(false);
+      return;
+    }
+
+    const endMs = new Date(req.auctionEndsAt).getTime();
+    if (Number.isNaN(endMs)) {
+      setIsDeadlinePassed(false);
+      return;
+    }
+
+    const remaining = endMs - Date.now();
+    if (remaining <= 0) {
+      setIsDeadlinePassed(true);
+      return;
+    }
+
+    setIsDeadlinePassed(false);
+    const delay = Math.min(remaining, 2147483647);
+    const timer = window.setTimeout(() => {
+      if (Date.now() >= endMs) {
+        setIsDeadlinePassed(true);
+      }
+    }, delay + 50);
+
+    return () => window.clearTimeout(timer);
+  }, [req?.auctionEndsAt, req?.status]);
+
+  const isBiddingEnded = !!req && (req.status === "expired" || (req.status === "open" && isDeadlinePassed));
+  const isAuctionOpen = !!req && req.status === "open" && !isDeadlinePassed;
+
   const isOwner = user?.id === req?.buyerId;
   const isProvider =
     user?.role === "provider" ||
@@ -248,8 +305,8 @@ export default function RequirementDetail() {
     user?.role === "retail_buyer" ||
     user?.role === "enterprise_buyer";
 
-  const canBid = isProvider && req?.status === "open" && !isOwner;
-  const canRepost = isOwner && req && ["accepted", "in_progress", "completed", "expired", "cancelled"].includes(req.status);
+  const canBid = isProvider && isAuctionOpen && !isOwner;
+  const canRepost = isOwner && req && (["accepted", "in_progress", "completed", "expired", "cancelled"].includes(req.status) || isBiddingEnded);
   const isTwoEnvelope = req?.bidType === "two_envelope";
 
   // Top 3 bidders for Bhaav-Taav access
@@ -281,6 +338,7 @@ export default function RequirementDetail() {
         onSuccess: () => {
           toast({ title: "Bid accepted!", description: "The provider has been notified." });
           qc.invalidateQueries({ queryKey: getGetRequirementQueryKey(id) });
+          qc.invalidateQueries({ queryKey: ["requirement-activity", id] });
         },
         onError: () => toast({ title: "Error", description: "Failed to accept bid", variant: "destructive" }),
       }
@@ -294,6 +352,7 @@ export default function RequirementDetail() {
         onSuccess: () => {
           toast({ title: "Technical bid approved!", description: "The provider's financial amount is now visible." });
           qc.invalidateQueries({ queryKey: getGetRequirementQueryKey(id) });
+          qc.invalidateQueries({ queryKey: ["requirement-activity", id] });
         },
         onError: () => toast({ title: "Error", description: "Failed to approve technical bid", variant: "destructive" }),
       }
@@ -370,6 +429,52 @@ export default function RequirementDetail() {
     } finally {
       setIsSmartMatching(false);
     }
+  };
+
+  const handleShareAuction = async () => {
+    if (!req || typeof window === "undefined") return;
+    const shareUrl = `${window.location.origin}/requirements/${req.id}`;
+    const shareTitle = `${req.title} — OmniBid India`;
+    const shareText = `Bid on "${req.title}" in ${req.city} (Max Budget: ₹${req.maxBudget.toLocaleString("en-IN")}) on OmniBid India:`;
+
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl,
+        });
+        toast({
+          title: "Auction shared!",
+          description: "The auction link was shared with your selected app or contact.",
+        });
+        return;
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          return;
+        }
+      }
+    }
+
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 2500);
+        toast({
+          title: "Auction link copied",
+          description: "Web Share is unavailable here, so the link was copied to your clipboard.",
+        });
+        return;
+      }
+    } catch {
+      // Fallback toast below if clipboard permissions are restricted
+    }
+
+    toast({
+      title: "Share Auction Link",
+      description: shareUrl,
+    });
   };
 
   const Icon = req ? getCategoryIcon(req.categoryIconName) : null;
@@ -501,10 +606,29 @@ export default function RequirementDetail() {
                         <Users className="h-3 w-3 mr-1 inline" />Syndicate
                       </Badge>
                     )}
-                    <Badge variant={req.status === "open" ? "default" : req.status === "accepted" || req.status === "in_progress" ? "default" : "secondary"} className="text-xs capitalize">
-                      {req.status.replace("_", " ")}
+                    <Badge
+                      variant={
+                        isBiddingEnded
+                          ? "secondary"
+                          : req.status === "open" || req.status === "accepted" || req.status === "in_progress"
+                          ? "default"
+                          : "secondary"
+                      }
+                      className={`text-xs capitalize ${
+                        isBiddingEnded ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30" : ""
+                      }`}
+                      data-testid="badge-auction-status"
+                    >
+                      {isBiddingEnded ? (
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          Bidding Ended
+                        </span>
+                      ) : (
+                        req.status.replace("_", " ")
+                      )}
                     </Badge>
-                    {stats?.isBidWar && (
+                    {isAuctionOpen && stats?.isBidWar && (
                       <span className="flex items-center gap-1 text-xs text-orange-500 font-semibold animate-pulse">
                         <Flame className="h-3.5 w-3.5" />
                         Bid War!
@@ -541,25 +665,79 @@ export default function RequirementDetail() {
 
             <p className="text-sm text-foreground/80 mt-3 leading-relaxed">{req.description}</p>
 
-            {req.status === "open" && (
-              <div className="flex items-center gap-4 mt-4 p-3 rounded-lg bg-muted/50">
-                <div>
-                  <div className="text-xs text-muted-foreground">Closes in</div>
-                  <Countdown endsAt={req.auctionEndsAt} large />
-                </div>
-                <Separator orientation="vertical" className="h-10" />
-                <div>
-                  <div className="text-xs text-muted-foreground">Total bids</div>
-                  <div className="text-2xl font-bold">{req.bidCount}</div>
-                </div>
-                {stats?.lowestBid && (
-                  <>
-                    <Separator orientation="vertical" className="h-10" />
-                    <div>
-                      <div className="text-xs text-muted-foreground">Lowest bid</div>
-                      <div className="text-2xl font-bold text-green-600">₹{stats.lowestBid.toLocaleString("en-IN")}</div>
+            {(isAuctionOpen || isBiddingEnded) && (
+              <div
+                className={`mt-4 p-3 rounded-lg border ${
+                  isBiddingEnded
+                    ? "bg-muted/60 border-amber-500/30"
+                    : "bg-muted/50 border-border/60"
+                }`}
+                data-testid={isBiddingEnded ? "bidding-ended-panel" : "auction-countdown-panel"}
+              >
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {isBiddingEnded ? "Auction Status" : "Closes in"}
                     </div>
-                  </>
+                    {isBiddingEnded ? (
+                      <div
+                        className="text-lg sm:text-xl font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5 mt-0.5"
+                        data-testid="bidding-ended-status"
+                      >
+                        <Lock className="h-4 w-4 shrink-0" />
+                        Bidding Ended
+                      </div>
+                    ) : (
+                      <Countdown
+                        endsAt={req.auctionEndsAt}
+                        large
+                        expiredText="Bidding Ended"
+                        onExpire={() => setIsDeadlinePassed(true)}
+                      />
+                    )}
+                    {req.auctionEndsAt && !Number.isNaN(new Date(req.auctionEndsAt).getTime()) && (
+                      <div className="text-[11px] text-muted-foreground mt-0.5 tabular-nums">
+                        {isBiddingEnded ? "Closed" : "Deadline"}:{" "}
+                        {new Date(req.auctionEndsAt).toLocaleString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <Separator orientation="vertical" className="h-10 hidden sm:block" />
+                  <div>
+                    <div className="text-xs text-muted-foreground">Total bids</div>
+                    <div className="text-2xl font-bold tabular-nums">{req.bidCount}</div>
+                  </div>
+                  {stats?.lowestBid && (
+                    <>
+                      <Separator orientation="vertical" className="h-10 hidden sm:block" />
+                      <div>
+                        <div className="text-xs text-muted-foreground">Lowest bid</div>
+                        <div className="text-2xl font-bold text-green-600 tabular-nums">
+                          ₹{stats.lowestBid.toLocaleString("en-IN")}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {isBiddingEnded && (
+                  <div
+                    className="mt-2.5 pt-2.5 border-t border-border/60 text-xs text-muted-foreground flex items-center gap-1.5"
+                    data-testid="banner-bidding-ended"
+                  >
+                    <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>
+                      {isOwner
+                        ? "The auction deadline has passed. New bids are closed, and you can still award a submitted bid or repost this requirement."
+                        : "The auction deadline has passed. Bidding has ended and new submissions are closed."}
+                    </span>
+                  </div>
                 )}
               </div>
             )}
@@ -572,6 +750,19 @@ export default function RequirementDetail() {
               >
                 <Gavel className="h-4 w-4 mr-1.5" />
                 {isTwoEnvelope ? "Submit Technical Bid (Envelope A)" : "Place Your Bid"}
+              </Button>
+            )}
+
+            {isProvider && !isOwner && isBiddingEnded && (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled
+                className="w-full mt-3 font-semibold opacity-80 cursor-not-allowed"
+                data-testid="button-bidding-ended"
+              >
+                <Lock className="h-4 w-4 mr-1.5" />
+                Bidding Ended
               </Button>
             )}
 
@@ -747,15 +938,15 @@ export default function RequirementDetail() {
             )}
 
             {/* Payment button */}
-            {(isOwner || isProvider) && ["accepted", "in_progress"].includes(req.status) && (
+            {(isOwner || isProvider) && ["accepted", "in_progress", "completed"].includes(req.status) && (
               <Button
-                variant={req.status === "in_progress" ? "outline" : "default"}
+                variant={req.status === "in_progress" || req.status === "completed" ? "outline" : "default"}
                 className={`w-full mt-2 ${req.status === "accepted" ? "bg-green-600 hover:bg-green-700 text-white" : ""}`}
                 onClick={() => setLocation(`/payment/${id}`)}
                 data-testid="button-payment"
               >
                 <IndianRupee className="h-4 w-4 mr-1.5" />
-                {req.status === "in_progress" ? "View Escrow & Work Proofs" : "Initiate UPI Escrow Payment"}
+                {req.status === "in_progress" || req.status === "completed" ? "View Escrow & Work Proofs" : "Initiate UPI Escrow Payment"}
               </Button>
             )}
 
@@ -772,22 +963,72 @@ export default function RequirementDetail() {
               </Button>
             )}
 
-            {/* Multilingual 1-Click WhatsApp Broadcast Generator */}
-            <a
-              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(getWhatsAppBroadcastText())}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full mt-2 inline-flex items-center justify-center rounded-md text-sm font-semibold transition-colors bg-green-600 hover:bg-green-700 text-white h-9 px-4 py-2 shadow-sm"
-              title="Share deal directly to contractor and vendor WhatsApp groups"
-              data-testid="button-broadcast-whatsapp"
-            >
-              <MessageSquare className="h-4 w-4 mr-1.5" />
-              {language === "hi"
-                ? "ठेकेदार व्हाट्सएप ग्रुप में शेयर करें"
-                : language === "te"
-                ? "కాంట్రాక్టర్ వాట్సాప్ గ్రూపులకు షేర్ చేయండి"
-                : "Broadcast to Contractor WhatsApp Groups"}
-            </a>
+            {/* Subscribe to lower-bid alerts + Bookmark + Share via Web Share API + WhatsApp Broadcast */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2 flex-wrap">
+              <RequirementSubscribeButton
+                requirementId={req.id}
+                requirementTitle={req.title}
+                isAuctionOpen={isAuctionOpen}
+                lowestBid={stats?.lowestBid ?? req.lowestBid}
+              />
+              <Button
+                type="button"
+                variant={isSaved(req.id) ? "secondary" : "outline"}
+                className={`shrink-0 font-semibold ${
+                  isSaved(req.id) ? "border border-primary/30 text-primary bg-primary/10 hover:bg-primary/15" : ""
+                }`}
+                disabled={isBookmarkPending}
+                onClick={() => toggleBookmark(req.id, req.title)}
+                aria-pressed={isSaved(req.id)}
+                data-testid="button-bookmark-requirement"
+              >
+                {isSaved(req.id) ? (
+                  <>
+                    <BookmarkCheck className="h-4 w-4 mr-1.5" />
+                    Saved
+                  </>
+                ) : (
+                  <>
+                    <Bookmark className="h-4 w-4 mr-1.5" />
+                    Save
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="sm:w-32 shrink-0 font-semibold"
+                onClick={handleShareAuction}
+                data-testid="button-share-auction"
+              >
+                {shareCopied ? (
+                  <>
+                    <Check className="h-4 w-4 mr-1.5 text-emerald-600" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="h-4 w-4 mr-1.5" />
+                    Share
+                  </>
+                )}
+              </Button>
+              <a
+                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(getWhatsAppBroadcastText())}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 min-w-[220px] inline-flex items-center justify-center rounded-md text-sm font-semibold transition-colors bg-green-600 hover:bg-green-700 text-white h-9 px-4 py-2 shadow-sm"
+                title="Share deal directly to contractor and vendor WhatsApp groups"
+                data-testid="button-broadcast-whatsapp"
+              >
+                <MessageSquare className="h-4 w-4 mr-1.5" />
+                {language === "hi"
+                  ? "ठेकेदार व्हाट्सएप ग्रुप में शेयर करें"
+                  : language === "te"
+                  ? "కాంట్రాక్టర్ వాట్సాప్ గ్రూపులకు షేర్ చేయండి"
+                  : "Broadcast to Contractor WhatsApp Groups"}
+              </a>
+            </div>
 
             {/* Live War Room Ticker Link */}
             <Button
@@ -795,11 +1036,11 @@ export default function RequirementDetail() {
               className="w-full mt-2 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/20"
               onClick={() => setLocation(`/auction/${id}`)}
             >
-              <Flame className="h-4 w-4 mr-1.5 text-red-500 animate-pulse" />
-              Open Live Reverse Auction War Room
+              <Flame className={`h-4 w-4 mr-1.5 text-red-500 ${isAuctionOpen ? "animate-pulse" : ""}`} />
+              {isBiddingEnded ? "View Closed Auction War Room" : "Open Live Reverse Auction War Room"}
             </Button>
 
-            {!user && (
+            {!user && isAuctionOpen && (
               <Button className="w-full mt-3" onClick={() => setLocation("/login")} data-testid="button-login-to-bid">
                 Login to Place a Bid
               </Button>
@@ -877,6 +1118,31 @@ export default function RequirementDetail() {
           </CardContent>
         </Card>
 
+        {/* Completed Contract Buyer Feedback */}
+        {(() => {
+          const completedBid = req.bids.find(
+            (b) => b.id === req.winningBidId || b.status === "accepted"
+          );
+          if (req.status !== "completed" || !completedBid) return null;
+          return (
+            <ContractFeedback
+              requirementId={req.id}
+              requirementTitle={req.title}
+              providerId={completedBid.providerId}
+              providerName={completedBid.providerName}
+              contractStatus={req.status}
+              isBuyer={isOwner}
+            />
+          );
+        })()}
+
+        {/* Auction Bid Price History Sparkline */}
+        <BidHistorySparkline
+          bids={req.bids}
+          maxBudget={req.maxBudget}
+          requirementStatus={req.status}
+        />
+
         {/* Bids */}
         <Card>
           <CardHeader className="pb-3">
@@ -922,7 +1188,9 @@ export default function RequirementDetail() {
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-semibold text-sm">{bid.providerName}</span>
+                          <Link href={`/profile/${bid.providerId}`} className="font-semibold text-sm hover:text-primary hover:underline">
+                            {bid.providerName}
+                          </Link>
                           {bid.providerIsVerified && <Shield className="h-3.5 w-3.5 text-primary" />}
                           {smartMatchData?.recommendedBidId === bid.id && (
                             <Badge className="text-[10px] bg-violet-600 text-white px-1.5 py-0 flex items-center gap-0.5">
@@ -1135,6 +1403,12 @@ export default function RequirementDetail() {
             })}
           </CardContent>
         </Card>
+
+        {/* Chronological Activity Log */}
+        <RequirementActivityLog
+          requirementId={req.id}
+          isAuctionOpen={isAuctionOpen}
+        />
       </div>
 
       {/* Raise Dispute Dialog */}

@@ -4,6 +4,21 @@ import { db, requirementsTable, categoriesTable, usersTable, bidsTable, reviewsT
 import { CreateRequirementBody, ListRequirementsQueryParams, AcceptBidBody } from "@omnibid/api-zod";
 import { requireAuth, optionalAuth } from "../middlewares/auth";
 import { notifyUser } from "../lib/notifications";
+import {
+  subscribeToRequirement,
+  unsubscribeFromRequirement,
+  isUserSubscribedToRequirement,
+  getRequirementSubscriberCount,
+} from "../services/requirement-alerts.service.js";
+import {
+  saveRequirementForUser,
+  unsaveRequirementForUser,
+  getSavedRequirementEntriesForUser,
+} from "../services/saved-requirements.service.js";
+import {
+  getRequirementActivityLog,
+  recordRequirementActivity,
+} from "../services/activity-log.service.js";
 import { avg } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -161,6 +176,71 @@ router.get("/requirements/my", requireAuth, async (req, res): Promise<void> => {
   res.json(results);
 });
 
+router.get("/requirements/saved", requireAuth, async (req, res): Promise<void> => {
+  const entries = getSavedRequirementEntriesForUser(req.user!.userId);
+  if (entries.length === 0) {
+    res.json({ requirements: [], savedIds: [] });
+    return;
+  }
+
+  const hydrated = await Promise.all(
+    entries.map(async ({ requirementId, savedAt }) => {
+      const [r] = await db.select().from(requirementsTable).where(eq(requirementsTable.id, requirementId));
+      if (!r) return null;
+      const [cat] = await db.select().from(categoriesTable).where(eq(categoriesTable.id, r.categoryId));
+      const [buyer] = await db.select().from(usersTable).where(eq(usersTable.id, r.buyerId));
+      if (!cat || !buyer) return null;
+      const [bidStats] = await db
+        .select({ count: count(), minBid: min(bidsTable.bidAmount) })
+        .from(bidsTable)
+        .where(and(eq(bidsTable.requirementId, r.id), eq(bidsTable.status, "active")));
+      return {
+        ...formatReq(r, cat, buyer, Number(bidStats?.count ?? 0), bidStats?.minBid ? Number(bidStats.minBid) : null),
+        savedAt,
+      };
+    })
+  );
+
+  const valid = hydrated.filter((item): item is NonNullable<typeof item> => item !== null);
+  res.json({
+    requirements: valid,
+    savedIds: valid.map((item) => item.id),
+  });
+});
+
+router.post("/requirements/:id/bookmark", requireAuth, async (req, res): Promise<void> => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+  const [requirement] = await db.select().from(requirementsTable).where(eq(requirementsTable.id, id));
+  if (!requirement) {
+    res.status(404).json({ error: "Requirement not found" });
+    return;
+  }
+
+  const result = saveRequirementForUser(req.user!.userId, id);
+  res.status(201).json({
+    requirementId: id,
+    saved: true,
+    savedAt: result.savedAt,
+  });
+});
+
+router.delete("/requirements/:id/bookmark", requireAuth, async (req, res): Promise<void> => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+  const [requirement] = await db.select().from(requirementsTable).where(eq(requirementsTable.id, id));
+  if (!requirement) {
+    res.status(404).json({ error: "Requirement not found" });
+    return;
+  }
+
+  unsaveRequirementForUser(req.user!.userId, id);
+  res.json({
+    requirementId: id,
+    saved: false,
+  });
+});
+
 router.get("/requirements/stats/:id", async (req, res): Promise<void> => {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 
@@ -184,6 +264,108 @@ router.get("/requirements/stats/:id", async (req, res): Promise<void> => {
     avgBid: stats?.avgBid ? Number(stats.avgBid) : null,
     isBidWar: bidCount >= 5,
   });
+});
+
+router.get("/requirements/:id/subscribe", optionalAuth, async (req, res): Promise<void> => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+  const [requirement] = await db.select().from(requirementsTable).where(eq(requirementsTable.id, id));
+  if (!requirement) {
+    res.status(404).json({ error: "Requirement not found" });
+    return;
+  }
+
+  const allBids = await db.select().from(bidsTable).where(eq(bidsTable.requirementId, id));
+  const activeAmounts = allBids
+    .filter((b) => (b.status === "active" || b.status === "envelope_a_approved") && Number(b.bidAmount) > 0)
+    .map((b) => Number(b.bidAmount));
+  const overallLowestBid = activeAmounts.length > 0 ? Math.min(...activeAmounts) : null;
+
+  const userAmounts = req.user
+    ? allBids
+        .filter(
+          (b) =>
+            b.providerId === req.user!.userId &&
+            (b.status === "active" || b.status === "envelope_a_approved") &&
+            Number(b.bidAmount) > 0
+        )
+        .map((b) => Number(b.bidAmount))
+    : [];
+  const userBestBid = userAmounts.length > 0 ? Math.min(...userAmounts) : null;
+
+  res.json({
+    requirementId: id,
+    subscribed: req.user ? isUserSubscribedToRequirement(id, req.user.userId) : false,
+    subscriberCount: getRequirementSubscriberCount(id),
+    userBestBid,
+    overallLowestBid,
+    currentBestBid: userBestBid ?? overallLowestBid,
+  });
+});
+
+router.post("/requirements/:id/subscribe", requireAuth, async (req, res): Promise<void> => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+  const [requirement] = await db.select().from(requirementsTable).where(eq(requirementsTable.id, id));
+  if (!requirement) {
+    res.status(404).json({ error: "Requirement not found" });
+    return;
+  }
+
+  subscribeToRequirement(id, req.user!.userId);
+
+  const allBids = await db.select().from(bidsTable).where(eq(bidsTable.requirementId, id));
+  const activeAmounts = allBids
+    .filter((b) => (b.status === "active" || b.status === "envelope_a_approved") && Number(b.bidAmount) > 0)
+    .map((b) => Number(b.bidAmount));
+  const overallLowestBid = activeAmounts.length > 0 ? Math.min(...activeAmounts) : null;
+
+  const userAmounts = allBids
+    .filter(
+      (b) =>
+        b.providerId === req.user!.userId &&
+        (b.status === "active" || b.status === "envelope_a_approved") &&
+        Number(b.bidAmount) > 0
+    )
+    .map((b) => Number(b.bidAmount));
+  const userBestBid = userAmounts.length > 0 ? Math.min(...userAmounts) : null;
+
+  res.status(201).json({
+    requirementId: id,
+    subscribed: true,
+    subscriberCount: getRequirementSubscriberCount(id),
+    userBestBid,
+    overallLowestBid,
+    currentBestBid: userBestBid ?? overallLowestBid,
+  });
+});
+
+router.delete("/requirements/:id/subscribe", requireAuth, async (req, res): Promise<void> => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+  const [requirement] = await db.select().from(requirementsTable).where(eq(requirementsTable.id, id));
+  if (!requirement) {
+    res.status(404).json({ error: "Requirement not found" });
+    return;
+  }
+
+  unsubscribeFromRequirement(id, req.user!.userId);
+
+  res.json({
+    requirementId: id,
+    subscribed: false,
+    subscriberCount: getRequirementSubscriberCount(id),
+  });
+});
+
+router.get("/requirements/:id/activity", optionalAuth, async (req, res): Promise<void> => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const events = await getRequirementActivityLog(id, req.user);
+  if (events === null) {
+    res.status(404).json({ error: "Requirement not found" });
+    return;
+  }
+  res.json({ requirementId: id, events });
 });
 
 router.get("/requirements/:id", optionalAuth, async (req, res): Promise<void> => {
@@ -283,9 +465,22 @@ router.post("/requirements/:id/cancel", requireAuth, async (req, res): Promise<v
   const [requirement] = await db.select().from(requirementsTable).where(eq(requirementsTable.id, id));
   if (!requirement) { res.status(404).json({ error: "Not found" }); return; }
   if (requirement.buyerId !== req.user!.userId) { res.status(403).json({ error: "Forbidden" }); return; }
+  const prevStatus = requirement.status;
   const [updated] = await db.update(requirementsTable).set({ status: "cancelled" }).where(eq(requirementsTable.id, id)).returning();
   const [cat] = await db.select().from(categoriesTable).where(eq(categoriesTable.id, updated.categoryId));
   const [buyer] = await db.select().from(usersTable).where(eq(usersTable.id, updated.buyerId));
+  recordRequirementActivity({
+    id: `req-cancelled-${id}-${Date.now()}`,
+    requirementId: id,
+    category: "status",
+    type: "requirement_cancelled",
+    title: "Requirement Cancelled",
+    description: `${buyer?.name ?? "Buyer"} cancelled this procurement requirement.`,
+    actorName: buyer?.name ?? "Buyer",
+    actorRole: "Buyer",
+    statusFrom: prevStatus,
+    statusTo: "cancelled",
+  });
   res.json(formatReq(updated, cat, buyer, 0, null));
 });
 
@@ -304,6 +499,7 @@ router.post("/requirements/:id/accept-bid", requireAuth, async (req, res): Promi
   // Check if a payment already exists
   const [existingPayment] = await db.select().from(paymentsTable).where(eq(paymentsTable.requirementId, id));
 
+  const prevStatus = requirement.status;
   await db.update(bidsTable).set({ status: "accepted" }).where(eq(bidsTable.id, parsed.data.bidId));
   await db.update(bidsTable).set({ status: "rejected" }).where(and(eq(bidsTable.requirementId, id), sql`${bidsTable.id} != ${parsed.data.bidId}`));
   const [updated] = await db.update(requirementsTable)
@@ -341,8 +537,22 @@ router.post("/requirements/:id/accept-bid", requireAuth, async (req, res): Promi
 
   const [cat] = await db.select().from(categoriesTable).where(eq(categoriesTable.id, updated.categoryId));
   const [buyer] = await db.select().from(usersTable).where(eq(usersTable.id, updated.buyerId));
+  const [providerUser] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, bid.providerId));
+  recordRequirementActivity({
+    id: `bid-accepted-${bid.id}`,
+    requirementId: id,
+    category: "status",
+    type: "bid_accepted",
+    title: "Winning Bid Awarded",
+    description: `${buyer?.name ?? "Buyer"} accepted ${providerUser?.name ?? "contractor"}'s bid of ₹${Number(bid.bidAmount).toLocaleString("en-IN")}.`,
+    actorName: buyer?.name ?? "Buyer",
+    actorRole: "Buyer",
+    amountInr: Number(bid.bidAmount),
+    statusFrom: prevStatus,
+    statusTo: "accepted",
+  });
   const [bidStats] = await db.select({ count: count(), minBid: min(bidsTable.bidAmount) }).from(bidsTable).where(eq(bidsTable.requirementId, id));
-   res.json(formatReq(updated, cat, buyer, Number(bidStats?.count ?? 0), bidStats?.minBid ? Number(bidStats.minBid) : null));
+  res.json(formatReq(updated, cat, buyer, Number(bidStats?.count ?? 0), bidStats?.minBid ? Number(bidStats.minBid) : null));
 });
 
 router.get("/requirements/:id/smart-match", requireAuth, async (req, res): Promise<void> => {

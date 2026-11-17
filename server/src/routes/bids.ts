@@ -6,6 +6,11 @@ import { requireAuth, requireCompliance } from "../middlewares/auth";
 import { notifyUser } from "../lib/notifications";
 import { broadcastAuctionEvent, extendedAuctions } from "./auction.js";
 import { notifyOutbid } from "../services/push-notification.service.js";
+import {
+  dispatchLowerBidAlertsForRequirement,
+  isUserSubscribedToRequirement,
+} from "../services/requirement-alerts.service.js";
+import { recordRequirementActivity } from "../services/activity-log.service.js";
 import { broadcastDeal } from "../services/auto-broadcaster.js";
 import { SEEDED_AFFILIATE_OFFERS } from "./affiliate.js";
 
@@ -67,6 +72,10 @@ router.post("/requirements/:requirementId/bids", requireAuth, requireCompliance,
 
   const [requirement] = await db.select().from(requirementsTable).where(eq(requirementsTable.id, requirementId));
   if (!requirement || requirement.status !== "open") { res.status(400).json({ error: "Requirement not open" }); return; }
+  if (new Date(requirement.auctionEndsAt).getTime() <= Date.now()) {
+    res.status(400).json({ error: "Bidding has ended for this requirement." });
+    return;
+  }
 
   // Duplicate bid check to prevent multiple active bids from same provider
   const [existingBid] = await db
@@ -107,17 +116,19 @@ router.post("/requirements/:requirementId/bids", requireAuth, requireCompliance,
   const hasEnvA = !!(parsed.data as { envelopeAUrl?: string }).envelopeAUrl;
   const bidStatus = isTwoEnvelope ? (hasEnvA ? "envelope_a_pending" : "active") : "active";
 
-  // Check current L1 bid prior to inserting the new bid
-  const [previousL1] = await db
+  // Snapshot existing bids for L1 comparison and subscriber current-best-bid comparison
+  const existingBidsSnapshot = await db
     .select({
       id: bidsTable.id,
       providerId: bidsTable.providerId,
       bidAmount: bidsTable.bidAmount,
+      status: bidsTable.status,
     })
     .from(bidsTable)
-    .where(and(eq(bidsTable.requirementId, requirementId), eq(bidsTable.status, "active")))
-    .orderBy(asc(bidsTable.bidAmount))
-    .limit(1);
+    .where(eq(bidsTable.requirementId, requirementId))
+    .orderBy(asc(bidsTable.bidAmount));
+
+  const previousL1 = existingBidsSnapshot.find((b) => b.status === "active");
 
   const [bid] = await db.insert(bidsTable).values({
     requirementId,
@@ -172,10 +183,28 @@ router.post("/requirements/:requirementId/bids", requireAuth, requireCompliance,
         reason: "Anti-sniping auto extension triggered within final 120 seconds",
         timestamp: new Date().toISOString(),
       });
+
+      recordRequirementActivity({
+        id: `auction-extended-${bid.id}`,
+        requirementId,
+        category: "status",
+        type: "auction_extended",
+        title: "Auction Deadline Extended (+120s)",
+        description: `Anti-sniping protection extended closing time after an L1 bid of ₹${Number(newBidAmount).toLocaleString("en-IN")} arrived in the final 2 minutes.`,
+        actorName: "Anti-Sniping Guard",
+        actorRole: "System",
+        amountInr: Number(newBidAmount),
+        statusFrom: "closing",
+        statusTo: "extended",
+      });
     }
 
-    // 2. Trigger notifyOutbid to the previously leading contractor
-    if (previousL1 && previousL1.providerId !== req.user!.userId) {
+    // 2. Trigger notifyOutbid to the previously leading contractor (unless already notified via requirement subscription)
+    if (
+      previousL1 &&
+      previousL1.providerId !== req.user!.userId &&
+      !isUserSubscribedToRequirement(requirementId, previousL1.providerId)
+    ) {
       notifyOutbid(
         requirementId,
         previousL1.providerId,
@@ -200,6 +229,37 @@ router.post("/requirements/:requirementId/bids", requireAuth, requireCompliance,
     );
   }
 
+  // Notify requirement subscribers whose current best bid (or previous L1) is beaten by this new active bid
+  if (bidStatus === "active") {
+    dispatchLowerBidAlertsForRequirement({
+      requirementId,
+      requirementTitle: requirement.title,
+      newBidId: bid.id,
+      newBidAmount: Number(newBidAmount),
+      bidderId: req.user!.userId,
+      previousL1Amount: previousL1 ? Number(previousL1.bidAmount) : null,
+      existingBids: existingBidsSnapshot,
+    }).catch((err) => console.warn("[Bids] Failed to dispatch lower-bid alerts:", err));
+  }
+
+  if (bidStatus === "active") {
+    const [bidderUser] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, req.user!.userId));
+    recordRequirementActivity({
+      id: `bid-placed-${bid.id}`,
+      requirementId,
+      category: "bids",
+      type: isNewL1 ? "bid_l1_captured" : "bid_placed",
+      title: isNewL1 ? "New L1 Lowest Bid Placed" : "Bid Submitted",
+      description: `Quoted ₹${Number(newBidAmount).toLocaleString("en-IN")} · Est. completion: ${bid.estimatedCompletion}${isNewL1 ? " — captured L1 lowest position" : ""}.`,
+      actorName: bidderUser?.name ?? "Contractor",
+      actorRole: "Contractor",
+      amountInr: Number(newBidAmount),
+      statusFrom: null,
+      statusTo: "active",
+      timestamp: bid.createdAt.toISOString(),
+    });
+  }
+
   await notifyUser(requirement.buyerId, "new_bid", `New bid received for "${requirement.title}"`, { requirementId, bidId: bid.id });
 
   res.status(201).json(await formatBid(bid));
@@ -214,12 +274,52 @@ router.post("/bids/:id/approve-envelope-a", requireAuth, async (req, res): Promi
   if (!requirement) { res.status(404).json({ error: "Requirement not found" }); return; }
   if (requirement.buyerId !== req.user!.userId) { res.status(403).json({ error: "Forbidden" }); return; }
 
+  const existingBidsBeforeReveal = await db
+    .select({
+      id: bidsTable.id,
+      providerId: bidsTable.providerId,
+      bidAmount: bidsTable.bidAmount,
+      status: bidsTable.status,
+    })
+    .from(bidsTable)
+    .where(eq(bidsTable.requirementId, bid.requirementId))
+    .orderBy(asc(bidsTable.bidAmount));
+
+  const previousLowestRevealed = existingBidsBeforeReveal.find(
+    (b) => b.id !== id && (b.status === "active" || b.status === "envelope_a_approved") && Number(b.bidAmount) > 0
+  );
+
   const [updated] = await db.update(bidsTable)
     .set({ status: "envelope_a_approved" })
     .where(eq(bidsTable.id, id))
     .returning();
 
   await notifyUser(bid.providerId, "envelope_approved", `Your technical bid for "${requirement.title}" was approved! Your financial amount is now visible.`, { requirementId: bid.requirementId, bidId: id });
+
+  const [envProvider] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, bid.providerId));
+  recordRequirementActivity({
+    id: `bid-env-approved-${id}`,
+    requirementId: bid.requirementId,
+    category: "status",
+    type: "envelope_a_approved",
+    title: "Technical Bid Approved & Price Revealed",
+    description: `Buyer approved Envelope A for ${envProvider?.name ?? "contractor"}, revealing quote ₹${Number(updated.bidAmount).toLocaleString("en-IN")}.`,
+    actorName: "Buyer",
+    actorRole: "Buyer",
+    amountInr: Number(updated.bidAmount),
+    statusFrom: "envelope_a_pending",
+    statusTo: "envelope_a_approved",
+  });
+
+  dispatchLowerBidAlertsForRequirement({
+    requirementId: bid.requirementId,
+    requirementTitle: requirement.title,
+    newBidId: id,
+    newBidAmount: Number(updated.bidAmount),
+    bidderId: bid.providerId,
+    previousL1Amount: previousLowestRevealed ? Number(previousLowestRevealed.bidAmount) : null,
+    existingBids: existingBidsBeforeReveal.filter((b) => b.id !== id),
+  }).catch((err) => console.warn("[Bids] Failed to dispatch lower-bid alerts on envelope reveal:", err));
 
   res.json(await formatBid(updated));
 });
@@ -230,6 +330,20 @@ router.post("/bids/:id/withdraw", requireAuth, async (req, res): Promise<void> =
   if (!bid) { res.status(404).json({ error: "Bid not found" }); return; }
   if (bid.providerId !== req.user!.userId) { res.status(403).json({ error: "Forbidden" }); return; }
   const [updated] = await db.update(bidsTable).set({ status: "withdrawn" }).where(eq(bidsTable.id, id)).returning();
+  const [withdrawingUser] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, bid.providerId));
+  recordRequirementActivity({
+    id: `bid-withdrawn-${id}`,
+    requirementId: bid.requirementId,
+    category: "bids",
+    type: "bid_withdrawn",
+    title: "Bid Withdrawn",
+    description: `${withdrawingUser?.name ?? "Contractor"} withdrew their bid of ₹${Number(bid.bidAmount).toLocaleString("en-IN")}.`,
+    actorName: withdrawingUser?.name ?? "Contractor",
+    actorRole: "Contractor",
+    amountInr: Number(bid.bidAmount),
+    statusFrom: bid.status,
+    statusTo: "withdrawn",
+  });
   res.json(await formatBid(updated));
 });
 

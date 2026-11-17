@@ -68,12 +68,12 @@ function BuyerDashboard({ data }: { data: Record<string, unknown> }) {
   const recentReqs = (data.recentRequirements ?? []) as { id: string; title: string; status: string; bidCount: number; maxBudget: number }[];
 
   const STATUS_COLOR: Record<string, string> = {
-    open: "bg-blue-100 text-blue-700",
-    accepted: "bg-green-100 text-green-700",
-    in_progress: "bg-yellow-100 text-yellow-700",
-    completed: "bg-emerald-100 text-emerald-700",
+    open: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300",
+    accepted: "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300",
+    in_progress: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-300",
+    completed: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
     expired: "bg-muted text-muted-foreground",
-    disputed: "bg-red-100 text-red-700",
+    disputed: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300",
   };
 
   return (
@@ -94,7 +94,7 @@ function BuyerDashboard({ data }: { data: Record<string, unknown> }) {
             {categoryBreakdown.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={categoryBreakdown} margin={{ left: -20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.12} />
                   <XAxis dataKey="category" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip formatter={(v: number) => [v, "Requirements"]} />
@@ -113,7 +113,7 @@ function BuyerDashboard({ data }: { data: Record<string, unknown> }) {
             {categoryBreakdown.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={categoryBreakdown} margin={{ left: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.12} />
                   <XAxis dataKey="category" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip formatter={(v: number) => [`₹${v.toLocaleString("en-IN")}`, "Avg Budget"]} />
@@ -159,12 +159,12 @@ function ProviderDashboard({ data }: { data: Record<string, unknown> }) {
 
   const omniColor = omniScore >= 700 ? "text-emerald-600" : omniScore >= 400 ? "text-blue-600" : "text-orange-500";
   const BID_STATUS_COLOR: Record<string, string> = {
-    active: "bg-blue-100 text-blue-700",
-    accepted: "bg-green-100 text-green-700",
-    rejected: "bg-red-100 text-red-700",
+    active: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300",
+    accepted: "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300",
+    rejected: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300",
     withdrawn: "bg-muted text-muted-foreground",
-    envelope_a_pending: "bg-yellow-100 text-yellow-700",
-    envelope_a_approved: "bg-purple-100 text-purple-700",
+    envelope_a_pending: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-300",
+    envelope_a_approved: "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300",
   };
 
   const winRateData = [
@@ -345,7 +345,7 @@ function AdminDashboard() {
             {sectorData.length > 0 ? (
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={sectorData} layout="vertical" margin={{ left: 10, right: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.12} />
                   <XAxis type="number" tick={{ fontSize: 10 }} />
                   <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={100} />
                   <Tooltip formatter={(v: number) => [v, "Requirements"]} />
@@ -364,7 +364,7 @@ function AdminDashboard() {
             {cityData.length > 0 ? (
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={cityData} layout="vertical" margin={{ left: 10, right: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.12} />
                   <XAxis type="number" tick={{ fontSize: 10 }} />
                   <YAxis dataKey="city" type="category" tick={{ fontSize: 10 }} width={80} />
                   <Tooltip formatter={(v: number) => [v, "Requirements"]} />

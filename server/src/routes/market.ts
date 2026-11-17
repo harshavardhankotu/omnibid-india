@@ -5,13 +5,46 @@ import {
   paymentsTable, reviewsTable, disputesTable, complianceVaultTable,
   vendorRankingsTable, sustainabilityRecordsTable,
 } from "@omnibid/db";
-import { requireAuth } from "../middlewares/auth";
+import { requireAuth, optionalAuth } from "../middlewares/auth";
+import { predictMarketPrice } from "../services/price-predictor.service.js";
 import { z } from "zod";
 
 const router: IRouter = Router();
 
 const PROVIDER_ROLES = ["provider", "both", "solo_provider", "agency_provider"];
 const BUYER_ROLES = ["buyer", "both", "retail_buyer", "enterprise_buyer"];
+
+const PricePredictorQuery = z.object({
+  categoryId: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  deadlineHours: z.coerce.number().min(1).max(168).optional(),
+  currentBudget: z.coerce.number().min(0).optional(),
+  isSyndicate: z.enum(["true", "false"]).optional(),
+  isMegaProject: z.enum(["true", "false"]).optional(),
+});
+
+// GET /market/price-predictor — historical bid-based Target Price range predictor
+router.get("/market/price-predictor", optionalAuth, async (req, res): Promise<void> => {
+  const parsed = PricePredictorQuery.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const q = parsed.data;
+  const prediction = await predictMarketPrice({
+    categoryId: q.categoryId || undefined,
+    city: q.city || undefined,
+    state: q.state || undefined,
+    deadlineHours: q.deadlineHours,
+    currentBudget: q.currentBudget,
+    isSyndicate: q.isSyndicate === "true",
+    isMegaProject: q.isMegaProject === "true",
+  });
+
+  res.json(prediction);
+});
 
 // GET /market/intelligence?categorySlug=&city= — competitor intelligence for providers
 router.get("/market/intelligence", requireAuth, async (req, res): Promise<void> => {

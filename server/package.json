@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
+    "dev": "NODE_ENV=development PORT=3000 npm run build && npm run start",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -12,21 +12,21 @@
     "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
-    "@omnibid/api-zod": "workspace:*",
-    "@omnibid/db": "workspace:*",
+    "@omnibid/api-zod": "*",
+    "@omnibid/db": "*",
     "@supabase/supabase-js": "^2.49.1",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2",
     "dotenv": "^17.4.2",
-    "drizzle-orm": "catalog:",
+    "drizzle-orm": "^0.45.2",
     "express": "^5",
     "jsonwebtoken": "^9.0.3",
     "pdfkit": "0.15.1",
     "pino": "^9",
     "pino-http": "^10",
     "razorpay": "^2.9.5",
-    "zod": "catalog:"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
@@ -34,12 +34,12 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "catalog:",
+    "@types/node": "^22.15.0",
     "@types/pdfkit": "0.13.9",
-    "esbuild": "^0.27.3",
+    "esbuild": "0.27.3",
     "esbuild-plugin-pino": "^2.3.3",
     "pino-pretty": "^13",
     "thread-stream": "3.1.0",
-    "tsx": "catalog:"
+    "tsx": "^4.21.0"
   }
 }

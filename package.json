@@ -2,30 +2,43 @@
   "name": "workspace",
   "version": "0.0.0",
   "license": "MIT",
+  "workspaces": [
+    "client",
+    "server",
+    "shared/*",
+    "drizzle",
+    "scripts"
+  ],
   "scripts": {
-    "build": "npx --yes pnpm --filter @omnibid/client run build && npx --yes pnpm --filter @omnibid/server run build",
+    "build": "npm run build --workspace=@omnibid/client && npm run build --workspace=@omnibid/server",
     "start": "node server/dist/index.mjs",
-    "typecheck": "tsc -b shared/api-zod shared/api-client-react drizzle && pnpm -r --if-present run typecheck",
+    "typecheck": "tsc -b shared/api-zod shared/api-client-react drizzle && npm run typecheck --workspaces --if-present",
+    "lint": "npm run typecheck",
     "test": "vitest run",
-    "dev:client": "pnpm --filter @omnibid/client run dev",
-    "dev:server": "pnpm --filter @omnibid/server run dev",
-    "dev": "pnpm run dev:server & pnpm run dev:client"
+    "dev:client": "npm run dev --workspace=@omnibid/client",
+    "dev:server": "npm run dev --workspace=@omnibid/server",
+    "dev": "node scripts/dev.mjs"
   },
   "private": true,
   "devDependencies": {
-    "typescript": "~5.9.2",
-    "prettier": "^3.8.1",
-    "zod": "^3.24.1",
     "@supabase/supabase-js": "^2.49.1",
+    "@types/pg": "^8.11.2",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.11.3",
-    "@types/pg": "^8.11.2",
-    "vitest": "^5.0.0"
+    "prettier": "^3.8.1",
+    "typescript": "~5.9.2",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.0.0",
+    "workbox-cacheable-response": "^7.4.1",
+    "workbox-expiration": "^7.4.1",
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1",
+    "workbox-strategies": "^7.4.1",
+    "workbox-window": "^7.4.1",
+    "zod": "^3.25.76"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "bcrypt"
-    ]
+  "dependencies": {
+    "@yudiel/react-qr-scanner": "^2.6.0",
+    "jsqr": "^1.4.0"
   }
 }

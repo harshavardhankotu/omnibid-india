@@ -1,7 +1,23 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL || "https://mock.supabase.co";
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "mock-service-key";
+function resolveSafeSupabaseUrl(raw: string | undefined): string {
+  const trimmed = (raw || "").trim();
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+      return trimmed;
+    }
+  } catch {
+    // Fallback to mock URL when env var is missing or malformed
+  }
+  return "https://mock.supabase.co";
+}
+
+const supabaseUrl = resolveSafeSupabaseUrl(process.env.SUPABASE_URL);
+const supabaseServiceKey =
+  (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim() ||
+  (process.env.SUPABASE_ANON_KEY || "").trim() ||
+  "mock-service-key";
 
 export const VAULT_BUCKET = "omnibid-vault";
 export const DEFAULT_SIGNED_URL_TTL = 900; // 15 minutes in seconds

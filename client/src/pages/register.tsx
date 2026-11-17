@@ -195,7 +195,7 @@ export default function Register() {
               </div>
 
               {isProviderRole && (
-                <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 dark:text-blue-300 dark:bg-blue-950/30 dark:border-blue-800 rounded-lg px-3 py-2">
                   KYC (Aadhaar / PAN) verification will be required via the Compliance Vault before you can bid.
                 </p>
               )}

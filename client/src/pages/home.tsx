@@ -5,7 +5,7 @@ import { RequirementCard } from "@/components/requirement-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { RequirementsListSkeleton } from "@/components/loading-skeletons";
 import { useListCategories, useListRequirements } from "@omnibid/api-client-react";
 import { getCategoryIcon } from "@/lib/category-icons";
 import { useAuth } from "@/lib/auth";
@@ -19,6 +19,8 @@ import {
   Zap,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { ReverseAuctionFaq } from "@/components/reverse-auction-faq";
 
 export default function Home() {
   const [, setLocation] = useLocation();
@@ -39,12 +41,15 @@ export default function Home() {
       {/* Hero */}
       <div className="bg-gradient-to-br from-primary via-primary/95 to-primary/80 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
-          <div className="flex items-center gap-2 mb-4">
-            <Gavel className="h-8 w-8 text-amber-300" />
-            <span className="text-2xl font-bold tracking-tight">OmniBid India</span>
-            <Badge variant="outline" className="border-white/30 text-white text-[10px] ml-2 font-mono">
-              BHARAT B2B ESCROW
-            </Badge>
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-2">
+              <Gavel className="h-8 w-8 text-amber-300" />
+              <span className="text-2xl font-bold tracking-tight">OmniBid India</span>
+              <Badge variant="outline" className="border-white/30 text-white text-[10px] ml-2 font-mono">
+                BHARAT B2B ESCROW
+              </Badge>
+            </div>
+            <ThemeToggle className="text-white hover:bg-white/15 hover:text-white" />
           </div>
           <h1 className="text-3xl md:text-5xl font-bold leading-tight mb-3">
             Post your problem.
@@ -132,11 +137,7 @@ export default function Home() {
           </div>
 
           {feedLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-32 rounded-xl" />
-              ))}
-            </div>
+            <RequirementsListSkeleton count={6} columns={2} />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {feedData?.requirements?.map((req) => (
@@ -183,6 +184,8 @@ export default function Home() {
             </div>
           )}
         </section>
+
+        <ReverseAuctionFaq />
       </div>
     </div>
   );

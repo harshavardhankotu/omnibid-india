@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, paymentsTable, workProofsTable, requirementsTable, bidsTable, usersTable } from "@omnibid/db";
-import { requireAuth } from "../middlewares/auth";
+import { requireAuth, optionalAuth } from "../middlewares/auth";
 import { z } from "zod";
 import { recalculateOmniScore } from "../lib/credit";
 import Razorpay from "razorpay";
@@ -64,6 +64,59 @@ function formatPayment(p: typeof paymentsTable.$inferSelect) {
     updatedAt: p.updatedAt.toISOString(),
   };
 }
+
+router.get("/payments/verify-receipt", optionalAuth, async (req, res): Promise<void> => {
+  const rawRef = typeof req.query.ref === "string" ? req.query.ref.trim() : "";
+  if (!rawRef) {
+    res.status(400).json({ verified: false, error: "Receipt or transaction reference is required." });
+    return;
+  }
+
+  const normalized = rawRef.replace(/^UTR_/, "");
+  const allPayments = await db.select().from(paymentsTable);
+
+  const match = allPayments.find((p) => {
+    if (p.id === rawRef || p.requirementId === rawRef) return true;
+    if (p.upiTransactionId && (p.upiTransactionId === rawRef || p.upiTransactionId === normalized)) return true;
+    // Match short 8-char requirement prefix embedded in OmniBid UPI note (OmniBid_<type>_<shortReqId>)
+    const cleanReqPrefix = p.requirementId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8);
+    return normalized.length >= 6 && cleanReqPrefix.toLowerCase() === normalized.toLowerCase();
+  });
+
+  if (!match) {
+    res.status(404).json({ verified: false, error: "No matching escrow payment receipt found for this QR code." });
+    return;
+  }
+
+  const [requirement] = await db
+    .select()
+    .from(requirementsTable)
+    .where(eq(requirementsTable.id, match.requirementId));
+  const [buyer] = await db.select().from(usersTable).where(eq(usersTable.id, match.buyerId));
+  const [provider] = await db.select().from(usersTable).where(eq(usersTable.id, match.providerId));
+
+  res.json({
+    verified: true,
+    receipt: {
+      paymentId: match.id,
+      requirementId: match.requirementId,
+      requirementTitle: requirement?.title ?? "OmniBid Escrow Contract",
+      city: requirement?.city ?? null,
+      buyerName: buyer?.name ?? "Verified Buyer",
+      providerName: provider?.name ?? "Verified Provider",
+      totalAmount: Number(match.totalAmount),
+      platformFeeAmount: Number(match.platformFeeAmount),
+      tdsAmount: Number(match.tdsAmount),
+      netToProvider: Number(match.netToProvider),
+      escrowStatus: match.escrowStatus,
+      upiTransactionId: match.upiTransactionId,
+      milestonesCompleted: match.milestonesCompleted,
+      totalMilestones: match.totalMilestones,
+      createdAt: match.createdAt.toISOString(),
+      updatedAt: match.updatedAt.toISOString(),
+    },
+  });
+});
 
 router.get("/requirements/:requirementId/payment", requireAuth, async (req, res): Promise<void> => {
   const requirementId = Array.isArray(req.params.requirementId)

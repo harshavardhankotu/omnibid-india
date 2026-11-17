@@ -33,8 +33,12 @@ import {
   MapPin,
   Globe,
   Coins,
+  QrCode,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { PWAInstallButton } from "@/components/pwa-controls";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { QrScannerModal } from "@/components/qr-scanner-modal";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -81,6 +85,7 @@ export default function Layout({ children }: LayoutProps) {
   };
 
   const [showProModal, setShowProModal] = useState(false);
+  const [showQrScanner, setShowQrScanner] = useState(false);
 
   const isPro =
     (user as any)?.subscriptionTier === "pro" ||
@@ -180,6 +185,20 @@ export default function Layout({ children }: LayoutProps) {
             </div>
 
             <div className="flex items-center gap-1 sm:gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={() => setShowQrScanner(true)}
+                aria-label="Scan QR Code"
+                title="Scan Auction or Receipt QR"
+                data-testid="button-open-qr-scanner"
+              >
+                <QrCode className="h-4 w-4" />
+              </Button>
+              <ThemeToggle />
+              <PWAInstallButton />
               {/* Bharat Multilingual Switcher */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -382,6 +401,8 @@ export default function Layout({ children }: LayoutProps) {
           localStorage.setItem("omnibid_pro_active", "true");
         }}
       />
+
+      <QrScannerModal open={showQrScanner} onOpenChange={setShowQrScanner} />
     </div>
   );
 }

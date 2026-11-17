@@ -8,6 +8,6 @@
     "rootDir": "src",
     "types": ["node"]
   },
-  "include": ["src/index.ts", "src/schema/**/*"],
+  "include": ["src/index.ts", "src/mock-db.ts", "src/schema/**/*"],
   "exclude": ["src/exhaustive-test.ts", "src/seed*.ts"]
 }

@@ -1,9 +1,11 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/lib/auth";
 import { ProtectedRoute } from "@/components/protected-route";
+import { OfflineIndicator, PushNotificationBridge, SWStatusManager, SyncStatusNotifier } from "@/components/pwa-controls";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Login from "@/pages/login";
@@ -37,7 +39,12 @@ import EscrowCheckoutPage from "@/pages/escrow-checkout";
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1, staleTime: 30000 },
+    queries: {
+      retry: 1,
+      staleTime: 30000,
+      gcTime: 1000 * 60 * 60 * 24,
+      networkMode: "offlineFirst",
+    },
   },
 });
 
@@ -103,18 +110,30 @@ import { I18nProvider } from "@/lib/i18n";
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <I18nProvider>
-          <AuthProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <Router />
-            </WouterRouter>
-            <Toaster />
-          </AuthProvider>
-        </I18nProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      storageKey="omnibid_theme"
+      disableTransitionOnChange
+    >
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <I18nProvider>
+            <AuthProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <Router />
+                <OfflineIndicator />
+                <SWStatusManager />
+                <SyncStatusNotifier />
+                <PushNotificationBridge />
+              </WouterRouter>
+              <Toaster />
+            </AuthProvider>
+          </I18nProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 

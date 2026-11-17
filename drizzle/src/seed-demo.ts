@@ -1,7 +1,7 @@
 import { db } from "./index";
 import { usersTable } from "./schema/users";
 import { eq } from "drizzle-orm";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 
 const demoUsers = [
   {

@@ -5,7 +5,7 @@ import { RequirementCard } from "@/components/requirement-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+import { RequirementsListSkeleton } from "@/components/loading-skeletons";
 import { useListCategories, useListRequirements } from "@omnibid/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { PlusCircle, Search, SlidersHorizontal } from "lucide-react";
@@ -87,11 +87,7 @@ export default function Requirements() {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-32 rounded-xl" />
-            ))}
-          </div>
+          <RequirementsListSkeleton count={8} columns={2} />
         ) : filtered.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {filtered.map((req) => (
