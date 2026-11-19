@@ -45,12 +45,13 @@ precacheAndRoute(self.__WB_MANIFEST || []);
 
 // 2. Navigation Strategy (HTML pages / SPA routes): NetworkFirst with cached SPA shell & offline.html fallback
 registerRoute(
-  ({ request }) => request.mode === "navigate",
+  ({ url, request }) =>
+    request.mode === "navigate" && !url.pathname.startsWith("/api"),
   new NetworkFirst({
     cacheName: "omnibid-pages-v2",
     networkTimeoutSeconds: 3,
     plugins: [
-      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new CacheableResponsePlugin({ statuses: [200] }),
       new ExpirationPlugin({ maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 7 }),
     ],
   })
@@ -65,10 +66,16 @@ registerRoute(
       url.pathname.startsWith("/api/market") ||
       url.pathname.startsWith("/api/affiliate/offers")),
   new NetworkFirst({
-    cacheName: "omnibid-api-v2",
+    cacheName: "omnibid-api-v3",
     networkTimeoutSeconds: 3,
     plugins: [
-      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new CacheableResponsePlugin({ statuses: [200] }),
+      {
+        cacheWillUpdate: async ({ response }) => {
+          const contentType = response?.headers.get("content-type") || "";
+          return contentType.toLowerCase().includes("json") ? response : null;
+        },
+      },
       new ExpirationPlugin({ maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 }),
     ],
   })
@@ -161,7 +168,14 @@ self.addEventListener("install", () => {
 });
 
 self.addEventListener("activate", (event: any) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    (async () => {
+      if (typeof caches !== "undefined") {
+        await caches.delete("omnibid-api-v2");
+      }
+      await self.clients.claim();
+    })()
+  );
 });
 
 self.addEventListener("message", (event: any) => {

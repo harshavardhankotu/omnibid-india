@@ -833,7 +833,7 @@ export default function AdminRevenue() {
               </CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
-              {blastResult.broadcasts?.map((b: any, i: number) => (
+              {(Array.isArray(blastResult.broadcasts) ? blastResult.broadcasts : []).map((b: any, i: number) => (
                 <div key={i} className="p-3 rounded-lg border border-emerald-200 bg-white/70 dark:bg-card/70 text-xs space-y-1.5">
                   <div className="flex items-center justify-between font-bold text-emerald-800 dark:text-emerald-300">
                     <span>{b.partnerName}</span>

@@ -100,7 +100,8 @@ export default function NewRequirement() {
   const isMegaProject = form.watch("isMegaProject");
   const isSyndicate = form.watch("isSyndicate");
   const jugaadMode = form.watch("jugaadMode");
-  const selectedCategory = categories?.find((c: Category) => c.id === selectedCategoryId);
+  const categoryList = Array.isArray(categories) ? categories : [];
+  const selectedCategory = categoryList.find((c: Category) => c.id === selectedCategoryId);
 
   const onSubmit = (data: FormData) => {
     createMutation.mutate(
@@ -160,7 +161,7 @@ export default function NewRequirement() {
                   render={({ field }) => (
                     <FormItem>
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                        {categories?.map((cat: Category) => {
+                        {categoryList.map((cat: Category) => {
                           const Icon = getCategoryIcon(cat.iconName);
                           return (
                             <button

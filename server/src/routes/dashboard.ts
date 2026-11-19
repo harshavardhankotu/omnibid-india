@@ -13,12 +13,19 @@ router.get("/dashboard/buyer", requireAuth, async (req, res): Promise<void> => {
   const [acceptedCount] = await db.select({ count: count() }).from(requirementsTable).where(and(eq(requirementsTable.buyerId, userId), eq(requirementsTable.status, "accepted")));
   const [completedCount] = await db.select({ count: count() }).from(requirementsTable).where(and(eq(requirementsTable.buyerId, userId), eq(requirementsTable.status, "completed")));
 
-  const recent = await db.select().from(requirementsTable).where(eq(requirementsTable.buyerId, userId)).orderBy(desc(requirementsTable.createdAt)).limit(5);
+  const recent = await db.select().from(requirementsTable).where(eq(requirementsTable.buyerId, userId)).orderBy(desc(requirementsTable.createdAt)).limit(20);
 
   const recentWithMeta = await Promise.all(recent.map(async (r) => {
     const [cat] = await db.select().from(categoriesTable).where(eq(categoriesTable.id, r.categoryId));
     const [buyer] = await db.select().from(usersTable).where(eq(usersTable.id, r.buyerId));
     const [bidStats] = await db.select({ count: count(), minBid: min(bidsTable.bidAmount) }).from(bidsTable).where(eq(bidsTable.requirementId, r.id));
+    const [latestBid] = await db
+      .select({ createdAt: bidsTable.createdAt })
+      .from(bidsTable)
+      .where(eq(bidsTable.requirementId, r.id))
+      .orderBy(desc(bidsTable.createdAt))
+      .limit(1);
+
     return {
       id: r.id, buyerId: r.buyerId, categoryId: r.categoryId,
       categoryName: cat?.name ?? "", categorySlug: cat?.slug ?? "", categoryIconName: cat?.iconName ?? "",
@@ -27,6 +34,7 @@ router.get("/dashboard/buyer", requireAuth, async (req, res): Promise<void> => {
       deadlineHours: r.deadlineHours, auctionEndsAt: r.auctionEndsAt.toISOString(), status: r.status,
       attachmentUrl: r.attachmentUrl, winningBidId: r.winningBidId, isHighTicket: r.isHighTicket,
       bidCount: Number(bidStats?.count ?? 0), lowestBid: bidStats?.minBid ? Number(bidStats.minBid) : null,
+      latestBidAt: latestBid?.createdAt ? latestBid.createdAt.toISOString() : null,
       buyerName: buyer?.name ?? "", createdAt: r.createdAt.toISOString(),
     };
   }));
@@ -51,7 +59,7 @@ router.get("/dashboard/provider", requireAuth, async (req, res): Promise<void> =
 
   const [sub] = await db.select().from(providerSubscriptionsTable).where(eq(providerSubscriptionsTable.providerId, userId));
 
-  const recentBids = await db.select().from(bidsTable).where(eq(bidsTable.providerId, userId)).orderBy(desc(bidsTable.createdAt)).limit(5);
+  const recentBids = await db.select().from(bidsTable).where(eq(bidsTable.providerId, userId)).orderBy(desc(bidsTable.createdAt)).limit(20);
 
   const recentWithReq = await Promise.all(recentBids.map(async (b) => {
     const [req2] = await db.select().from(requirementsTable).where(eq(requirementsTable.id, b.requirementId));

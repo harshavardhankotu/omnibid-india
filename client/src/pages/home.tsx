@@ -30,6 +30,8 @@ export default function Home() {
 
   const { data: categories } = useListCategories();
   const { data: feedData, isLoading: feedLoading } = useListRequirements({ limit: 8 });
+  const categoryList = Array.isArray(categories) ? categories : [];
+  const requirementsList = Array.isArray(feedData?.requirements) ? feedData.requirements : [];
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,7 +104,7 @@ export default function Home() {
         <section className="mb-10">
           <h2 className="text-lg font-bold mb-4">Browse by Category</h2>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-3">
-            {categories?.map((cat) => {
+            {categoryList.map((cat) => {
               const Icon = getCategoryIcon(cat.iconName);
               return (
                 <button
@@ -140,13 +142,13 @@ export default function Home() {
             <RequirementsListSkeleton count={6} columns={2} />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {feedData?.requirements?.map((req) => (
+              {requirementsList.map((req) => (
                 <RequirementCard key={req.id} requirement={req} />
               ))}
             </div>
           )}
 
-          {!feedLoading && (!feedData?.requirements?.length) && (
+          {!feedLoading && requirementsList.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
               <Gavel className="h-10 w-10 mx-auto mb-3 opacity-30" />
               <p className="font-medium">No open requirements yet</p>

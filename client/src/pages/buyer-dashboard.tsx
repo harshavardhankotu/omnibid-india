@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import Layout from "@/components/layout";
-import { RequirementCard } from "@/components/requirement-card";
+import { BuyerRequirementsTable } from "@/components/dashboard-requirements-table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardStatsSkeleton, RequirementsListSkeleton } from "@/components/loading-skeletons";
@@ -209,35 +209,11 @@ export default function BuyerDashboard() {
             {isLoadingEffective ? (
               <RequirementsListSkeleton count={3} columns={1} />
             ) : effectiveData?.recentRequirements?.length ? (
-              <div className="space-y-3">
-                {effectiveData.recentRequirements.map((req) => (
-                  <div key={req.id} className="space-y-1.5">
-                    <RequirementCard requirement={req} />
-                    <div className="flex justify-end px-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleShareProjectSummary(req)}
-                        className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground whitespace-nowrap shrink-0"
-                        data-testid={`button-share-project-${req.id}`}
-                      >
-                        {sharedProjectId === req.id ? (
-                          <>
-                            <Check className="h-3.5 w-3.5 mr-1 text-emerald-600" />
-                            Summary Copied
-                          </>
-                        ) : (
-                          <>
-                            <Share2 className="h-3.5 w-3.5 mr-1" />
-                            Share Project Summary
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <BuyerRequirementsTable
+                requirements={effectiveData.recentRequirements}
+                sharedProjectId={sharedProjectId}
+                onShareProject={handleShareProjectSummary}
+              />
             ) : (
               <div className="text-center py-10 text-muted-foreground">
                 <PlusCircle className="h-8 w-8 mx-auto mb-2 opacity-30" />

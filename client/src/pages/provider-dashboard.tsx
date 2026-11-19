@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation, Link } from "wouter";
+import { useLocation } from "wouter";
 import Layout from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardBidRowSkeleton, DashboardStatsSkeleton } from "@/components/loading-skeletons";
 import { CachedModeBanner } from "@/components/cached-mode-banner";
+import { ProviderRequirementsTable } from "@/components/dashboard-requirements-table";
 import { useDashboardCache } from "@/hooks/use-dashboard-cache";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
@@ -399,105 +400,78 @@ export default function ProviderDashboard() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Recent Bids */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Recent Bids</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0 space-y-2">
-              {isLoadingEffective ? (
-                Array.from({ length: 3 }).map((_, i) => <DashboardBidRowSkeleton key={i} />)
-              ) : effectiveData?.recentBids?.length ? (
-                effectiveData.recentBids.map((bid) => (
-                  <Link key={bid.id} href={`/requirements/${bid.requirementId}`}>
-                    <div className="p-3 rounded-lg border border-border hover:border-primary/30 transition-colors cursor-pointer" data-testid={`card-bid-${bid.id}`}>
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium truncate flex-1">{bid.requirement?.title ?? "Requirement"}</p>
-                        <Badge variant={bid.status === "accepted" ? "default" : bid.status === "active" ? "secondary" : "outline"} className="text-xs ml-2 capitalize shrink-0">
-                          {bid.status}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between gap-2 mt-1.5">
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-0.5 font-semibold text-primary tabular-nums">
-                            <IndianRupee className="h-3 w-3" />{bid.bidAmount.toLocaleString("en-IN")}
-                          </span>
-                          <span>{bid.requirement?.city}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            void handleShareProjectBid(bid);
-                          }}
-                          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary px-2 py-1 rounded-md hover:bg-muted transition-colors whitespace-nowrap shrink-0"
-                          title="Share this project bid summary"
-                          data-testid={`button-share-project-${bid.requirementId}`}
-                        >
-                          {sharedBidId === bid.id ? (
-                            <>
-                              <Check className="h-3 w-3 text-emerald-600" />
-                              <span>Copied</span>
-                            </>
-                          ) : (
-                            <>
-                              <Share2 className="h-3 w-3" />
-                              <span>Share</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </Link>
-                ))
-              ) : (
-                <div className="text-center py-8 text-muted-foreground text-sm">
-                  No bids yet.{" "}
-                  <button onClick={() => setLocation("/requirements")} className="text-primary hover:underline" data-testid="link-browse">
-                    Browse requirements
-                  </button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {/* Sortable Bid Requirements Table */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-base">Bid Requirements</CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setLocation("/requirements")} data-testid="button-browse-requirements-table">
+                Browse open
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {isLoadingEffective ? (
+              <div className="space-y-2">
+                {Array.from({ length: 3 }).map((_, i) => <DashboardBidRowSkeleton key={i} />)}
+              </div>
+            ) : effectiveData?.recentBids?.length ? (
+              <ProviderRequirementsTable
+                bids={effectiveData.recentBids}
+                sharedBidId={sharedBidId}
+                onShareProjectBid={handleShareProjectBid}
+              />
+            ) : (
+              <div className="text-center py-8 text-muted-foreground text-sm">
+                No bids yet.{" "}
+                <button onClick={() => setLocation("/requirements")} className="text-primary hover:underline" data-testid="link-browse">
+                  Browse requirements
+                </button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-          {/* Category Breakdown */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Category Breakdown</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0 space-y-2">
-              {isLoadingEffective ? (
-                Array.from({ length: 4 }).map((_, i) => (
+        {/* Category Breakdown */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">Category Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {isLoadingEffective ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                {Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/40">
                     <Skeleton className="h-4 w-28" />
                     <Skeleton className="h-4 w-14" />
                   </div>
-                ))
-              ) : effectiveData?.categoryBreakdown?.length ? (
-                effectiveData.categoryBreakdown.map((cat) => (
-                  <div key={cat.categoryName} className="flex items-center justify-between p-2 rounded-lg bg-muted/50" data-testid={`row-category-${cat.categoryName}`}>
+                ))}
+              </div>
+            ) : effectiveData?.categoryBreakdown?.length ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                {effectiveData.categoryBreakdown.map((cat) => (
+                  <div key={cat.categoryName} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/50" data-testid={`row-category-${cat.categoryName}`}>
                     <span className="text-sm font-medium">{cat.categoryName}</span>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums">
                       <span>{cat.bidCount} bids</span>
                       {cat.wonCount > 0 && <Badge variant="outline" className="text-xs">{cat.wonCount} won</Badge>}
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-muted-foreground text-sm">No data yet</div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground text-sm">No data yet</div>
+            )}
+          </CardContent>
+        </Card>
 
         <AuctionCalendar
           requirements={
-            effectiveData?.recentBids
-              ?.map((b) => b.requirement)
-              .filter((r): r is Requirement => !!r) ?? []
+            Array.isArray(effectiveData?.recentBids)
+              ? effectiveData.recentBids
+                  .map((b) => b.requirement)
+                  .filter((r): r is Requirement => !!r)
+              : []
           }
           roleLabel="provider"
           isLoading={isLoadingEffective}

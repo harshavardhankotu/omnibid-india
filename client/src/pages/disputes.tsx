@@ -72,6 +72,7 @@ export default function Disputes() {
   const { data: disputes, isLoading } = useListDisputes({
     query: { queryKey: getListDisputesQueryKey(), enabled: !!user },
   });
+  const disputeList = Array.isArray(disputes) ? disputes : [];
 
   const respondMutation = useRespondToDispute();
   const resolveMutation = useResolveDispute();
@@ -147,7 +148,7 @@ export default function Disputes() {
           </div>
         )}
 
-        {!isLoading && (!disputes || disputes.length === 0) && (
+        {!isLoading && disputeList.length === 0 && (
           <div className="text-center py-16 text-muted-foreground">
             <CheckCircle2 className="h-10 w-10 mx-auto mb-3 opacity-30" />
             <p className="font-medium">No disputes</p>
@@ -156,7 +157,7 @@ export default function Disputes() {
         )}
 
         <div className="space-y-3">
-          {disputes?.map((dispute) => {
+          {disputeList.map((dispute) => {
             const isRaisedByMe = dispute.raisedById === user.id;
             const isRespondent = dispute.respondentId === user.id;
             const canRespond = isRespondent && dispute.status === "open";

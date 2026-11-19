@@ -308,6 +308,25 @@ async function parseSuccessBody(
 
     case "text": {
       const text = await response.text();
+      if (
+        responseType === "auto" &&
+        requestInfo.url.includes("/api/")
+      ) {
+        const trimmed = stripBom(text).trimStart();
+        if (looksLikeJson(trimmed)) {
+          try {
+            return JSON.parse(trimmed);
+          } catch {
+            // Fall through to parse error below
+          }
+        }
+        throw new ResponseParseError(
+          response,
+          text.slice(0, 300),
+          new Error("Expected JSON from API endpoint but received non-JSON response"),
+          requestInfo,
+        );
+      }
       return text === "" ? null : text;
     }
 
@@ -345,7 +364,11 @@ export async function customFetch<T = unknown>(
     headers.set("content-type", "application/json");
   }
 
-  if (responseType === "json" && !headers.has("accept")) {
+  if (
+    (responseType === "json" ||
+      (responseType === "auto" && resolveUrl(input).includes("/api/"))) &&
+    !headers.has("accept")
+  ) {
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 

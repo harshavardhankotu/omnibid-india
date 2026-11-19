@@ -24,7 +24,8 @@ export default function Requirements() {
     limit: 30,
   });
 
-  const requirements = data?.requirements ?? [];
+  const categoryList = Array.isArray(categories) ? categories : [];
+  const requirements = Array.isArray(data?.requirements) ? data.requirements : [];
   const filtered = search
     ? requirements.filter(
         (r) =>
@@ -70,7 +71,7 @@ export default function Requirements() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
-              {categories?.map((cat) => (
+              {categoryList.map((cat) => (
                 <SelectItem key={cat.id} value={cat.id}>
                   {cat.name}
                 </SelectItem>
